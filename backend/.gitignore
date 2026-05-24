@@ -1,0 +1,66 @@
+# ─────────────────────────────  Python  ─────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+.Python
+
+# ─────────────────────────────  uv / venv  ───────────────────────────
+.venv/
+venv/
+env/
+
+# ─────────────────────────────  Pytest / mypy / ruff caches  ────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+
+# ─────────────────────────────  Secrets + local config  ─────────────
+# .env holds runtime secrets (Gemini key, Postgres URL, session secret).
+# .env.example is the template and IS committed.
+.env
+.env.local
+.env.*.local
+*.pem
+
+# ─────────────────────────────  Local data  ─────────────────────────
+# File uploads + any local sqlite / db dumps. Schema migrations are
+# tracked under app/migrations/.
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# ─────────────────────────────  Build / dist  ───────────────────────
+build/
+dist/
+*.manifest
+*.spec
+
+# ─────────────────────────────  Editor / OS junk  ───────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─────────────────────────────  Logs  ───────────────────────────────
+*.log
+logs/
+
+# ─────────────────────────────  AI assistant configs  ───────────────
+.claude/
+.superpowers/
+
+# ─────────────────────────────  Docker  ─────────────────────────────
+# docker-compose creates volumes by name; ignore any local override.
+docker-compose.override.yml

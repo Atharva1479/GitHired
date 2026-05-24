@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16
+    container_name: jobpilot-db
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: job_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: .
+    container_name: jobpilot-api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/job_tracker
+      CORS_ORIGINS: '["http://localhost:3000"]'
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Bind-mount the renamed package + alembic.ini so dev hot-reload picks
+    # up local edits without rebuilding the image.
+    volumes:
+      - ./app:/srv/app
+      - ./alembic.ini:/srv/alembic.ini
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    profiles: ["full"]
+
+volumes:
+  pgdata:

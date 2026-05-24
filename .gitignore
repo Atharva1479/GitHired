@@ -1,0 +1,28 @@
+# ─── AI assistant configs (not for version control) ─────────────────────────
+.claude/
+.superpowers/
+.code-review-graph/
+.opencode.json
+.mcp.json
+
+# ─── All root-level markdown files except README ─────────────────────────────
+/*.md
+!README.md
+
+# ─── Planning / build docs folder ────────────────────────────────────────────
+docs/
+
+# ─── Editor / OS junk ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Cache artifacts ─────────────────────────────────────────────────────────
+.pytest_cache/
+*.log
+
+# ─── GitHub Actions / CI ─────────────────────────────────────────────────────
+.github/
