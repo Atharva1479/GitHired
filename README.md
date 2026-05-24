@@ -9,7 +9,6 @@ Track applications · Score your resume · Study with AI · Practice DSA · Mock
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
 
@@ -70,62 +69,30 @@ Past sessions are saved with soft-delete. You can review any report at any time.
 ## Project Structure
 
 ```
-job-tracker/
+GitHired/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── config.py
-│   │   ├── db.py
-│   │   ├── models.py
 │   │   ├── migrations/
 │   │   ├── repositories/
-│   │   │   ├── applications.py
-│   │   │   ├── referrals.py
-│   │   │   ├── study.py
-│   │   │   ├── dsa.py
-│   │   │   ├── interview.py
-│   │   │   └── ...
 │   │   ├── routers/
-│   │   │   ├── applications.py
-│   │   │   ├── referrals.py
-│   │   │   ├── study.py
-│   │   │   ├── dsa.py
-│   │   │   ├── interview.py
-│   │   │   ├── pilot.py
-│   │   │   ├── ats.py
-│   │   │   └── ...
 │   │   └── services/
-│   │       ├── gemini_service.py
-│   │       ├── ollama_service.py
-│   │       ├── interview_ai.py
-│   │       ├── dsa_ai.py
-│   │       ├── nudge_engine.py
-│   │       └── ...
 │   ├── pyproject.toml
-│   ├── uv.lock
 │   ├── alembic.ini
-│   ├── Dockerfile
-│   ├── docker-compose.yml
 │   └── .env.example
 └── frontend/
     ├── app/
-    │   ├── page.tsx            (landing page)
+    │   ├── page.tsx
     │   ├── dashboard/
     │   ├── applications/
     │   ├── referrals/
     │   ├── study/
     │   ├── dsa/
     │   ├── interview/
-    │   │   ├── page.tsx        (setup)
-    │   │   ├── session/page.tsx
-    │   │   ├── report/[id]/
-    │   │   └── history/page.tsx
     │   ├── ats/
     │   └── settings/
     ├── components/
-    │   ├── layout/
-    │   ├── interview/
-    │   └── ...
     ├── hooks/
     └── lib/
 ```
@@ -137,16 +104,16 @@ job-tracker/
 ### Prerequisites
 - Python 3.12+ with [uv](https://docs.astral.sh/uv/)
 - Node.js 20+
-- PostgreSQL 16
-- API keys: `GEMINI_API_KEY`, `ELEVENLABS_API_KEY`, `GROQ_API_KEY`
+- PostgreSQL 16 running locally
+- API keys (see [Environment Variables](#environment-variables) below)
 
 ### 1. Backend
 
 ```bash
 cd backend
-cp .env.example .env        # fill in your API keys and DATABASE_URL
+cp .env.example .env     # fill in your API keys
 
-docker compose up -d db     # start Postgres
+uv sync                  # install Python dependencies
 uv run alembic upgrade head  # apply all migrations
 
 uv run uvicorn app.main:app --reload
@@ -157,12 +124,12 @@ uv run uvicorn app.main:app --reload
 
 ```bash
 cd frontend
-cp .env.local.example .env.local   # set NEXT_PUBLIC_API_URL=http://localhost:8000/api
-
 npm install
 npm run dev
 # → http://localhost:3000
 ```
+
+> Set `NEXT_PUBLIC_API_URL=http://localhost:8000/api` in `frontend/.env.local`
 
 ### Common backend commands
 
@@ -174,36 +141,61 @@ npm run dev
 | Apply migrations | `uv run alembic upgrade head` |
 | New migration | `uv run alembic revision -m "describe change"` |
 | Lint | `uv run ruff check .` |
-| Type-check | `uv run mypy` |
 
 ---
 
-## API Overview
+## Environment Variables
 
-| Prefix | Description |
+Copy `backend/.env.example` to `backend/.env` and fill in the following keys:
+
+### 🗄️ Database
+| Variable | Description |
 |---|---|
-| `POST /api/auth/google` | Google OAuth sign-in |
-| `GET/POST /api/applications` | Application pipeline CRUD |
-| `GET/POST /api/referrals` | Referral pipeline CRUD |
-| `GET/POST /api/study` | Study plan generation and progress |
-| `GET/POST /api/dsa` | DSA problem log + AI review |
-| `POST /api/interview/sessions` | Start AI mock interview session |
-| `POST /api/interview/sessions/{id}/turns` | Submit one Q&A turn |
-| `POST /api/interview/sessions/{id}/end` | End session + trigger report |
-| `GET /api/interview/sessions/{id}/report` | Poll report (202 pending → 200 ready) |
-| `GET /api/interview/history` | List past sessions |
-| `POST /api/pilot/chat` | Pilot AI chat (text) |
-| `POST /api/pilot/tts` | Text-to-speech (ElevenLabs) |
-| `POST /api/pilot/stt` | Speech-to-text (Groq Whisper) |
-| `POST /api/ats/score` | ATS resume scoring (ML) |
-| `GET /api/gamification/profile` | XP, level, achievements |
+| `DATABASE_URL` | PostgreSQL connection string — e.g. `postgresql://postgres:postgres@localhost:5432/githired` |
+
+### 🤖 Gemini (LLM — study plans, AI chat, DSA review, interview evaluation)
+Get your key from **[Google AI Studio](https://aistudio.google.com/)** → *Get API key*.
+| Variable | Description |
+|---|---|
+| `GEMINI_API_KEY` | Your Gemini API key |
+| `GEMINI_MODEL` | Default: `gemini-2.5-flash-lite` (free tier, ~1000 req/day) |
+
+### 🦙 Ollama (local LLM fallback — optional)
+[Install Ollama](https://ollama.com/download), then run `ollama pull qwen3.5:2b`. No API key needed.
+| Variable | Description |
+|---|---|
+| `OLLAMA_BASE_URL` | Default: `http://localhost:11434` |
+| `OLLAMA_MODEL` | Default: `qwen3.5:2b` |
+
+### 🎙️ Groq (Speech-to-Text for voice agent & mock interviews)
+Get your key from **[Groq Console](https://console.groq.com/)** → *API Keys* → *Create API Key*. Free tier is generous.
+| Variable | Description |
+|---|---|
+| `GROQ_API_KEY` | Your Groq API key |
+
+### 🔊 ElevenLabs (Text-to-Speech for voice agent & mock interviews)
+Get your key from **[ElevenLabs](https://elevenlabs.io/)** → *Profile* → *API Key*. Free tier: 10k characters/month.
+| Variable | Description |
+|---|---|
+| `ELEVENLABS_API_KEY` | Your ElevenLabs API key |
+| `ELEVENLABS_VOICE_ID` | Default: `EXAVITQu4vr4xnSDxMaL` (Bella — free tier voice) |
+
+### 🔐 Google OAuth (sign-in)
+Go to **[Google Cloud Console](https://console.cloud.google.com/)** → *APIs & Services* → *Credentials* → *Create OAuth 2.0 Client ID*. Set authorized redirect URI to `http://localhost:8000/api/auth/google/callback`.
+| Variable | Description |
+|---|---|
+| `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID |
+| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 Client Secret |
+| `SESSION_SECRET` | Any long random string (e.g. run `openssl rand -hex 32`) |
+
+### 📧 Resend (email digest — optional)
+Get your key from **[Resend](https://resend.com/)** → *API Keys*. Leave blank to disable the digest feature.
+| Variable | Description |
+|---|---|
+| `RESEND_API_KEY` | Your Resend API key |
 
 ---
 
 ## Contributing
 
-This project is built and maintained by [Atharva Jamdar](https://github.com/AtharvaJamdar). Issues and PRs are welcome — please open an issue first for any significant changes.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+This project is built and maintained by [Atharva Jamdar](https://github.com/Atharva1479). Issues and PRs are welcome — please open an issue first for any significant changes.
