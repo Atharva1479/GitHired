@@ -11,6 +11,7 @@ import { DEFAULT_VOICE_ID, VOICE_OPTIONS, type AiProvider } from "@/lib/settings
 const LS_CONTINUOUS = "jp_pilot_continuous_mode";
 const LS_BARGE_IN   = "jp_pilot_barge_in";
 const LS_FAST_TTS   = "jp_pilot_fast_browser_tts";
+const LS_ORB_MODE   = "githired_interview_orb_mode";
 
 function readLs(key: string, fallback: boolean): boolean {
   try {
@@ -253,6 +254,7 @@ export default function SettingsPage() {
   const [continuous, setContinuous] = useState(() => readLs(LS_CONTINUOUS, true));
   const [bargeIn,    setBargeIn]    = useState(() => readLs(LS_BARGE_IN,   true));
   const [fastTts,    setFastTts]    = useState(() => readLs(LS_FAST_TTS,   false));
+  const [orbMode,    setOrbMode]    = useState(() => readLs(LS_ORB_MODE,   true));
   const [toastVisible, setToastVisible] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -459,6 +461,17 @@ export default function SettingsPage() {
               ))}
             </select>
           </div>
+        </Card>
+
+        {/* ── Interview ────────────────────────────────────── */}
+        <SectionHeading>Interview</SectionHeading>
+        <Card>
+          <ToggleRow
+            label="Orb mode"
+            sub="Show the animated AI orb during mock interviews instead of text questions (default: on)"
+            on={orbMode}
+            onToggle={() => { const n = !orbMode; setOrbMode(n); writeLs(LS_ORB_MODE, n); }}
+          />
         </Card>
 
         {/* ── Goals ────────────────────────────────────────── */}

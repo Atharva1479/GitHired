@@ -287,6 +287,54 @@ html, body {
 .rim-spin     { animation: rim-shimmer 24s linear infinite; transform-origin: 50% 50%; }
 .rim-spin-rev { animation: rim-shimmer-rev 32s linear infinite; transform-origin: 50% 50%; }
 
+/* ─────────  Interview liquid-blob orb  ───────── */
+
+@keyframes interview-blob-morph {
+  0%,100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  25%     { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  50%     { border-radius: 50% 60% 30% 60% / 30% 40% 70% 50%; }
+  75%     { border-radius: 40% 70% 60% 30% / 70% 30% 40% 60%; }
+}
+@keyframes interview-blob-grad {
+  0%,100% { background-position: 0%   50%; }
+  50%     { background-position: 100% 50%; }
+}
+
+.interview-blob {
+  background: linear-gradient(135deg, #c026d3, #7c3aed, #4f46e5, #0ea5e9);
+  background-size: 300% 300%;
+  animation:
+    interview-blob-morph var(--blob-morph-dur, 4s) ease-in-out infinite,
+    interview-blob-grad  var(--blob-grad-dur,  6s) ease          infinite;
+  border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  filter:
+    drop-shadow(0 0 28px var(--blob-glow-near, rgba(139,92,246,.75)))
+    drop-shadow(0 0 60px var(--blob-glow-far,  rgba(139,92,246,.30)));
+  transition: filter .5s ease, transform .4s ease;
+}
+.interview-blob-inner {
+  position: absolute;
+  inset: 18px;
+  background: radial-gradient(circle at 40% 35%, rgba(255,255,255,.26), transparent 65%);
+  border-radius: inherit;
+  animation: interview-blob-morph var(--blob-morph-dur, 4s) ease-in-out infinite reverse;
+}
+
+/* state variants — toggle via CSS custom properties on the wrapper */
+.interview-blob-wrap[data-state="speaking"] {
+  --blob-morph-dur: 2s;
+  --blob-grad-dur:  3s;
+}
+.interview-blob-wrap[data-state="listening"] {
+  --blob-morph-dur: 3s;
+  --blob-grad-dur:  4s;
+  --blob-glow-near: rgba(239,68,68,.75);
+  --blob-glow-far:  rgba(239,68,68,.30);
+}
+.interview-blob-wrap[data-state="listening"] .interview-blob {
+  background: linear-gradient(135deg, #ef4444, #dc2626, #b91c1c, #7f1d1d);
+}
+
 /* ─────────  Voice pearl — listening ripple  ───────── */
 
 @keyframes ripple-out {

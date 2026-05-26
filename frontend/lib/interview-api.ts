@@ -7,6 +7,7 @@ export interface StartSessionRequest {
   num_questions: number;
   difficulty: "easy" | "medium" | "hard";
   jd_text?: string;
+  custom_questions?: string[];
 }
 
 export interface StartSessionResponse {

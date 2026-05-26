@@ -29,6 +29,7 @@ class StartSessionRequest(BaseModel):
     num_questions: int = 7
     difficulty: str = "medium"
     jd_text: str | None = None
+    custom_questions: list[str] | None = None
 
     @property
     def duration_min(self) -> int:
@@ -47,14 +48,19 @@ async def start_session(
     conn: asyncpg.Connection = Depends(get_db),
     user_id: int = Depends(get_user_id),
 ) -> StartSessionResponse:
-    try:
-        questions = await generate_questions(
-            body.topic, body.role, body.years_exp,
-            body.num_questions, body.difficulty, body.jd_text,
-        )
-    except Exception as exc:
-        log.warning("interview.generate_questions_failed", error=str(exc))
-        raise HTTPException(status_code=503, detail="AI question generation unavailable. Try again.")
+    if body.custom_questions:
+        questions = [q.strip() for q in body.custom_questions if q.strip()]
+        if not questions:
+            raise HTTPException(status_code=400, detail="No valid custom questions provided")
+    else:
+        try:
+            questions = await generate_questions(
+                body.topic, body.role, body.years_exp,
+                body.num_questions, body.difficulty, body.jd_text,
+            )
+        except Exception as exc:
+            log.warning("interview.generate_questions_failed", error=str(exc))
+            raise HTTPException(status_code=503, detail="AI question generation unavailable. Try again.")
     total = len(questions)
     session = await repo.create_session(
         conn, user_id, body.topic, body.role, body.years_exp, body.duration_min, total

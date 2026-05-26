@@ -166,8 +166,14 @@ export default function SetupForm() {
   const [role, setRole] = useState(ROLES[0]);
   const [yearsExp, setYearsExp] = useState("1–3");
   const [jdText, setJdText] = useState("");
+  const [useCustomQ, setUseCustomQ] = useState(false);
+  const [customQText, setCustomQText] = useState("");
 
   const resolvedTopic = customTopic.trim() || selectedTech || selectedType || "";
+  const parsedCustomQ = customQText
+    .split("\n")
+    .map((q) => q.trim())
+    .filter((q) => q.length > 0);
 
   function pickType(label: string) {
     setSelectedType(label === selectedType ? null : label);
@@ -190,20 +196,22 @@ export default function SetupForm() {
   }
 
   const isJdBased = selectedType === "JD Based";
-  const canStart =
-    !isPending &&
-    resolvedTopic.trim().length > 0 &&
-    (!isJdBased || jdText.trim().length > 0);
+  const canStart = !isPending && (
+    useCustomQ
+      ? parsedCustomQ.length >= 1
+      : resolvedTopic.trim().length > 0 && (!isJdBased || jdText.trim().length > 0)
+  );
 
   async function handleStart() {
     if (!canStart) return;
     const res = await mutateAsync({
-      topic: resolvedTopic,
+      topic: resolvedTopic || "Custom Interview",
       role,
       years_exp: yearsExp,
-      num_questions: numQuestions,
+      num_questions: useCustomQ ? parsedCustomQ.length : numQuestions,
       difficulty,
-      jd_text: isJdBased ? jdText : undefined,
+      jd_text: !useCustomQ && isJdBased ? jdText : undefined,
+      custom_questions: useCustomQ ? parsedCustomQ : undefined,
     });
     localStorage.setItem(
       "jp_interview_session",
@@ -307,38 +315,81 @@ export default function SetupForm() {
 
       <Divider />
 
-      {/* ── Step 2: Difficulty ── */}
-      <SectionHeading step="2" title="Difficulty level" />
-
-      <div className="grid grid-cols-3 gap-2.5">
-        {DIFFICULTIES.map((d) => {
-          const active = difficulty === d.key;
-          return (
-            <button
-              key={d.key}
-              onClick={() => setDifficulty(d.key)}
-              className={`relative overflow-hidden text-left px-4 py-3 rounded-xl border-2 transition-all duration-150 ${
-                active
-                  ? `${d.activeBorder} ${d.activeBg}`
-                  : "border-[var(--color-border)] hover:border-[var(--color-text-3)]"
-              }`}
-            >
-              {active && <div className={`absolute inset-x-0 top-0 h-0.5 ${d.activeBar}`} />}
-              <div className="flex items-center gap-2">
-                <span className="text-base">{d.emoji}</span>
-                <p className={`font-bold text-sm ${active ? d.activeText : ""}`}>{d.label}</p>
-              </div>
-              <p className="text-xs text-[var(--color-text-3)] mt-1 leading-snug">{d.desc}</p>
-            </button>
-          );
-        })}
+      {/* ── Custom Questions Toggle ── */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-sm font-semibold text-[var(--color-text)]">Use my own questions</p>
+          <p className="text-xs text-[var(--color-text-3)] mt-0.5">Skip AI generation — paste your question list</p>
+        </div>
+        <button
+          onClick={() => setUseCustomQ((v) => !v)}
+          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+            useCustomQ ? "bg-indigo-600" : "bg-[var(--color-border)]"
+          }`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              useCustomQ ? "translate-x-5" : "translate-x-0"
+            }`}
+          />
+        </button>
       </div>
 
-      <Divider />
+      {useCustomQ && (
+        <>
+          <textarea
+            value={customQText}
+            onChange={(e) => setCustomQText(e.target.value)}
+            rows={6}
+            placeholder={`One question per line:\nWhat is a closure in JavaScript?\nExplain REST vs GraphQL trade-offs\nHow would you design a rate limiter?`}
+            className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm resize-none placeholder:text-[var(--color-text-3)] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          {parsedCustomQ.length > 0 && (
+            <p className="text-xs text-indigo-500 font-medium mt-1.5">
+              {parsedCustomQ.length} question{parsedCustomQ.length !== 1 ? "s" : ""} ready
+            </p>
+          )}
+        </>
+      )}
 
-      {/* ── Step 3: Questions ── */}
-      <SectionHeading step="3" title="How many questions?" />
-      <DotPicker value={numQuestions} onChange={setNumQuestions} />
+      {!useCustomQ && (
+        <>
+          <Divider />
+
+          {/* ── Step 2: Difficulty ── */}
+          <SectionHeading step="2" title="Difficulty level" />
+
+          <div className="grid grid-cols-3 gap-2.5">
+            {DIFFICULTIES.map((d) => {
+              const active = difficulty === d.key;
+              return (
+                <button
+                  key={d.key}
+                  onClick={() => setDifficulty(d.key)}
+                  className={`relative overflow-hidden text-left px-4 py-3 rounded-xl border-2 transition-all duration-150 ${
+                    active
+                      ? `${d.activeBorder} ${d.activeBg}`
+                      : "border-[var(--color-border)] hover:border-[var(--color-text-3)]"
+                  }`}
+                >
+                  {active && <div className={`absolute inset-x-0 top-0 h-0.5 ${d.activeBar}`} />}
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{d.emoji}</span>
+                    <p className={`font-bold text-sm ${active ? d.activeText : ""}`}>{d.label}</p>
+                  </div>
+                  <p className="text-xs text-[var(--color-text-3)] mt-1 leading-snug">{d.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          <Divider />
+
+          {/* ── Step 3: Questions ── */}
+          <SectionHeading step="3" title="How many questions?" />
+          <DotPicker value={numQuestions} onChange={setNumQuestions} />
+        </>
+      )}
 
       <Divider />
 
@@ -403,11 +454,15 @@ export default function SetupForm() {
             <>
               <Mic className="w-4 h-4" />
               Start Interview
-              {resolvedTopic && (
+              {useCustomQ ? (
+                <span className="text-xs font-normal opacity-70">
+                  {parsedCustomQ.length} custom question{parsedCustomQ.length !== 1 ? "s" : ""}
+                </span>
+              ) : resolvedTopic ? (
                 <span className="text-xs font-normal opacity-70">
                   {resolvedTopic} · {difficulty} · {numQuestions}q
                 </span>
-              )}
+              ) : null}
             </>
           )}
         </button>
