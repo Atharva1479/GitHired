@@ -11,15 +11,17 @@ import {
   Loader2,
   ThumbsUp,
   TrendingUp,
+  Wand2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { ScoreGauge } from "@/components/ats/ScoreGauge";
+import { TailorPanel } from "@/components/ats/TailorPanel";
 import type { ATSFeedback } from "@/lib/ats-api";
-import { getAtsFeedback } from "@/lib/ats-api";
-import type { AnalysisResult, CategoryScore } from "@/types/ats";
+import { getAtsFeedback, tailorResume } from "@/lib/ats-api";
+import type { AnalysisResult, CategoryScore, TailorSuggestion } from "@/types/ats";
 
 /* ── helpers ──────────────────────────────────────────────────────── */
 
@@ -63,6 +65,11 @@ export default function AtsResultsPage() {
   const [barsReady, setBarsReady] = useState(false);
   const [feedback, setFeedback]   = useState<ATSFeedback | null>(null);
   const [fbLoading, setFbLoading] = useState(false);
+  const [jdText, setJdText]                           = useState("");
+  const [tailorOpen, setTailorOpen]                   = useState(false);
+  const [tailorLoading, setTailorLoading]             = useState(false);
+  const [tailorSuggestions, setTailorSuggestions]     = useState<TailorSuggestion[]>([]);
+  const [tailorError, setTailorError]                 = useState<string | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem("ats_result");
@@ -70,6 +77,7 @@ export default function AtsResultsPage() {
     try {
       const parsed = JSON.parse(raw) as AnalysisResult;
       setResult(parsed);
+      setJdText(localStorage.getItem("ats_jd_text") ?? "");
       setHydrated(true);
       setTimeout(() => setBarsReady(true), 120);
 
@@ -82,6 +90,27 @@ export default function AtsResultsPage() {
       router.replace("/ats");
     }
   }, [router]);
+
+  async function runTailor() {
+    if (!result) return;
+    setTailorOpen(true);
+    setTailorLoading(true);
+    setTailorError(null);
+    setTailorSuggestions([]);
+    try {
+      const res = await tailorResume({
+        resume_text: result.resume_text ?? "",
+        jd_text: jdText,
+        required_missing: result.required_missing,
+        preferred_missing: result.preferred_missing,
+      });
+      setTailorSuggestions(res.suggestions);
+    } catch (err) {
+      setTailorError(err instanceof Error ? err.message : "Couldn't generate rewrites");
+    } finally {
+      setTailorLoading(false);
+    }
+  }
 
   if (!hydrated || !result) {
     return (
@@ -517,6 +546,53 @@ export default function AtsResultsPage() {
             <p className="text-[13px] text-[var(--color-text-3)]">AI feedback could not be generated.</p>
           )}
         </div>
+
+        {/* ── AI RESUME TAILOR ────────────────────────────────────── */}
+        {result && (result.required_missing.length > 0 || result.preferred_missing.length > 0) && (
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 space-y-4">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-[15px] font-semibold flex items-center gap-2 text-[var(--color-text)]">
+                  <Wand2 className="w-4 h-4 text-indigo-500" />
+                  AI Resume Tailor
+                </h2>
+                <p className="text-[12.5px] text-[var(--color-text-3)] mt-0.5">
+                  AI rewrites specific bullets to incorporate your missing keywords.
+                  Copy &amp; paste straight into your resume document.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {tailorOpen && !tailorLoading && (
+                  <button
+                    onClick={runTailor}
+                    className="text-[12px] font-medium text-[var(--color-text-3)] hover:text-indigo-500 transition-colors"
+                  >
+                    Regenerate
+                  </button>
+                )}
+                {!tailorOpen && (
+                  <button
+                    onClick={runTailor}
+                    disabled={!result.resume_text}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-[13px] font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                  >
+                    <Wand2 className="w-3.5 h-3.5" />
+                    Tailor my resume
+                  </button>
+                )}
+              </div>
+            </div>
+            {tailorOpen && (
+              <TailorPanel
+                suggestions={tailorSuggestions}
+                loading={tailorLoading}
+                error={tailorError}
+                resumeText={result.resume_text ?? ""}
+                onRetry={runTailor}
+              />
+            )}
+          </div>
+        )}
 
         {/* ── BOTTOM CTA ─────────────────────────────────────────── */}
         <div className="text-center py-4">

@@ -31,7 +31,7 @@ from app.services.observability import (
     configure_logging,
     configure_sentry,
 )
-from app.services.ollama_service import prewarm as ollama_prewarm
+from app.services.ollama_service import prewarm as ollama_prewarm, unload as ollama_unload
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.security import SecurityHeadersMiddleware, limiter
 
@@ -84,6 +84,7 @@ async def lifespan(_: FastAPI):
     log.info("app.stopping")
     if not prewarm_task.done():
         prewarm_task.cancel()
+    await ollama_unload()
     stop_scheduler()
     await close_db()
     log.info("app.stopped")

@@ -81,4 +81,17 @@ export type AnalysisResult = {
     semantic_sentence_active: boolean;
     word_semantic_active: boolean;
   };
+  resume_text: string;
+};
+
+export type TailorSuggestion = {
+  section: string;
+  original: string;
+  rewritten: string;
+  keywords_added: string[];
+  rationale?: string;
+};
+
+export type TailorResult = {
+  suggestions: TailorSuggestion[];
 };

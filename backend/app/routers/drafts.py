@@ -6,17 +6,19 @@ from fastapi import APIRouter, Depends, Response, status
 from app.config import settings
 from app.deps import get_db, get_user_id
 from app.exceptions import RateLimited
-from app.models import DraftOut, DraftRequest
+from app.models import CoverLetterRequest, DraftOut, DraftRequest
 from app.repositories import applications as apps_repo
 from app.repositories import drafts as drafts_repo
 from app.repositories import referrals as refs_repo
 from app.services import gamify
 from app.services.gemini_service import (
+    build_cover_letter_prompt,
     build_followup_email_prompt,
     build_referral_ask_prompt,
     build_referral_followup_prompt,
     generate_or_fallback,
 )
+from app.services.ats.text_extractor import extract_text_from_bytes
 
 router = APIRouter()
 
@@ -72,6 +74,71 @@ async def application_followup(
         entity_type="application",
         entity_id=app_id,
         draft_type="followup_email",
+        content=text, model=model,
+        prompt_tokens=pt, output_tokens=ot, fallback=fb,
+    )
+    gam = await gamify.record_event(
+        conn, user_id, "draft.sent", ref_type="draft", ref_id=draft.id,
+    )
+    gamify.attach(response, gam)
+    return draft
+
+
+@router.post(
+    "/application/{app_id}/cover-letter",
+    response_model=DraftOut,
+    status_code=status.HTTP_200_OK,
+)
+async def application_cover_letter(
+    app_id: int,
+    response: Response,
+    body: CoverLetterRequest = CoverLetterRequest(),
+    conn: asyncpg.Connection = Depends(get_db),
+    user_id: int = Depends(get_user_id),
+) -> DraftOut:
+    app = await apps_repo.get_application(conn, app_id, user_id)
+
+    if not body.regenerate:
+        cached = await drafts_repo.latest_fresh(
+            conn, user_id,
+            entity_type="application",
+            entity_id=app_id,
+            draft_type="cover_letter",
+        )
+        if cached:
+            return cached
+
+    # Read the uploaded resume from disk and extract its text
+    resume_text: str | None = None
+    if app.resume_file_name:
+        resume_path = settings.upload_dir / str(user_id) / str(app_id) / "resume.pdf"
+        if resume_path.exists():
+            try:
+                resume_text = extract_text_from_bytes(resume_path.read_bytes(), "resume.pdf")
+            except Exception:
+                resume_text = None
+
+    await _check_quota(conn, user_id)
+    prompt = build_cover_letter_prompt(
+        company=app.company,
+        role=app.role,
+        jd_text=app.jd_text,
+        resume_text=resume_text,
+        contact_name=app.contact_name,
+        tone=body.tone,
+    )
+    text, model, pt, ot, fb = await generate_or_fallback(
+        draft_type="cover_letter",
+        prompt=prompt,
+        company=app.company,
+        role=app.role,
+        contact_name=app.contact_name,
+    )
+    draft = await drafts_repo.insert(
+        conn, user_id,
+        entity_type="application",
+        entity_id=app_id,
+        draft_type="cover_letter",
         content=text, model=model,
         prompt_tokens=pt, output_tokens=ot, fallback=fb,
     )

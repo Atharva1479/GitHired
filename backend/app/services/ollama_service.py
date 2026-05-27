@@ -64,6 +64,7 @@ async def chat(
         "model": model or settings.ollama_model,
         "messages": messages,
         "stream": False,
+        "keep_alive": settings.ollama_keep_alive,
         "options": {"temperature": temperature},
     }
     if tools:
@@ -181,6 +182,7 @@ async def prewarm() -> None:
         "model": settings.ollama_model,
         "messages": [{"role": "user", "content": "Reply with: ok"}],
         "stream": False,
+        "keep_alive": settings.ollama_keep_alive,
         "options": {"temperature": 0.0, "num_predict": 4},
     }
     url = f"{settings.ollama_base_url.rstrip('/')}/api/chat"
@@ -206,3 +208,26 @@ async def prewarm() -> None:
         )
     except Exception as e:  # noqa: BLE001
         log.warning("ollama.prewarm.failed error=%s", str(e)[:200])
+
+
+async def unload() -> None:
+    """Unload the model from RAM immediately.
+
+    Called on graceful backend shutdown. Sends keep_alive=0 which tells
+    Ollama to evict the model as soon as this request completes.
+    Crash-safe — failure is logged and swallowed.
+    """
+    payload = {
+        "model": settings.ollama_model,
+        "messages": [{"role": "user", "content": "ok"}],
+        "stream": False,
+        "keep_alive": 0,
+        "options": {"temperature": 0.0, "num_predict": 1},
+    }
+    url = f"{settings.ollama_base_url.rstrip('/')}/api/chat"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(url, json=payload)
+        log.info("ollama.unload.ok model=%s", settings.ollama_model)
+    except Exception as e:  # noqa: BLE001
+        log.warning("ollama.unload.failed error=%s", str(e)[:200])

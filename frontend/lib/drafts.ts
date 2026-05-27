@@ -1,6 +1,7 @@
 export type DraftEntityType = "application" | "referral";
 export type DraftType =
   | "followup_email"
+  | "cover_letter"
   | "referral_ask"
   | "referral_followup"
   | "weekly_summary";
@@ -19,6 +20,7 @@ export type Draft = {
 
 export const DRAFT_TITLE: Record<DraftType, string> = {
   followup_email: "Follow-up email",
+  cover_letter: "Cover letter",
   referral_ask: "Referral ask",
   referral_followup: "Gentle follow-up",
   weekly_summary: "Weekly summary",
@@ -27,6 +29,8 @@ export const DRAFT_TITLE: Record<DraftType, string> = {
 export const DRAFT_SUBTITLE: Record<DraftType, string> = {
   followup_email:
     "A polite nudge to the hiring team about your application status.",
+  cover_letter:
+    "Generated from your uploaded resume + JD — specific, no clichés.",
   referral_ask:
     "A warm LinkedIn message asking for a referral at their company.",
   referral_followup:

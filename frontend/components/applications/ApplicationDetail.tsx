@@ -1,10 +1,11 @@
 "use client";
 
-import { Pencil, ExternalLink, Sparkles, Trash2, UserCircle2 } from "lucide-react";
+import { Pencil, ExternalLink, Sparkles, Trash2, UserCircle2, Mail, FileText } from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { useEffect, useState } from "react";
 
 import { useToast } from "@/app/providers";
+import { CoverLetterModal } from "@/components/drafts/CoverLetterModal";
 import { DraftModal } from "@/components/drafts/DraftModal";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -30,6 +31,7 @@ export function ApplicationDetail({
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   const [draftOpen, setDraftOpen] = useState(false);
+  const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [editing, setEditing] = useState(false);
 
   // Reset edit mode when switching applications.
@@ -128,26 +130,43 @@ export function ApplicationDetail({
             </div>
           ) : null}
 
-          {/* AI draft */}
-          <button
-            onClick={() => setDraftOpen(true)}
-            className="group w-full flex items-center gap-2.5 rounded-lg bg-indigo-500/5 ring-1 ring-indigo-500/15 px-3.5 py-2.5 text-left transition-colors hover:bg-indigo-500/10 hover:ring-indigo-500/25"
-          >
-            <span className="w-7 h-7 rounded-md bg-[var(--color-surface-2)] ring-1 ring-indigo-500/20 grid place-items-center shrink-0">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-[13.5px] font-medium text-[var(--color-text)]">
-                Draft a follow-up email
+          {/* AI drafts */}
+          <section>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Sparkles className="w-3 h-3 text-indigo-400" />
+              <span className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--color-text-3)]">
+                AI Drafts
               </span>
-              <span className="block text-[12px] text-[var(--color-text-3)]">
-                AI writes a polite, personalized nudge
-              </span>
-            </span>
-            <span className="text-[12px] font-medium text-indigo-400 group-hover:text-indigo-300">
-              Draft →
-            </span>
-          </button>
+            </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              <button
+                onClick={() => setDraftOpen(true)}
+                className="group flex items-center gap-2.5 rounded-lg bg-indigo-500/5 ring-1 ring-indigo-500/15 px-3 py-2.5 text-left transition-colors hover:bg-indigo-500/10 hover:ring-indigo-500/25"
+              >
+                <span className="w-7 h-7 rounded-md bg-[var(--color-surface-2)] ring-1 ring-indigo-500/20 grid place-items-center shrink-0">
+                  <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[13px] font-medium text-[var(--color-text)]">Follow-up email</span>
+                  <span className="block text-[11.5px] text-[var(--color-text-3)]">Nudge after applying — no reply yet</span>
+                </span>
+                <span className="text-[11.5px] font-medium text-indigo-400 group-hover:text-indigo-300 shrink-0">Draft →</span>
+              </button>
+              <button
+                onClick={() => setCoverLetterOpen(true)}
+                className="group flex items-center gap-2.5 rounded-lg bg-indigo-500/5 ring-1 ring-indigo-500/15 px-3 py-2.5 text-left transition-colors hover:bg-indigo-500/10 hover:ring-indigo-500/25"
+              >
+                <span className="w-7 h-7 rounded-md bg-[var(--color-surface-2)] ring-1 ring-indigo-500/20 grid place-items-center shrink-0">
+                  <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[13px] font-medium text-[var(--color-text)]">Cover letter</span>
+                  <span className="block text-[11.5px] text-[var(--color-text-3)]">Reads your resume + JD — specific, no clichés</span>
+                </span>
+                <span className="text-[11.5px] font-medium text-indigo-400 group-hover:text-indigo-300 shrink-0">Draft →</span>
+              </button>
+            </div>
+          </section>
 
           {/* job description text */}
           {app.jd_text ? (
@@ -232,6 +251,15 @@ export function ApplicationDetail({
             request={
               draftOpen ? { kind: "application_followup", appId: app.id } : null
             }
+          />
+          <CoverLetterModal
+            open={coverLetterOpen}
+            onClose={() => setCoverLetterOpen(false)}
+            appId={app.id}
+            company={app.company}
+            role={app.role}
+            hasJd={!!app.jd_text}
+            hasResume={!!app.resume_file_name}
           />
         </div>
       )}

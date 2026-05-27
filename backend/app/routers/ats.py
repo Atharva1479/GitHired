@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.services.ats.ai_feedback import generate_ats_feedback
+from app.services.ats.resume_tailor import generate_tailor_suggestions
 from app.services.ats.scorer import analyze_resume
 from app.services.ats.text_extractor import extract_text_from_bytes
 
@@ -19,10 +20,38 @@ class ATSFeedbackRequest(BaseModel):
     suggestions: list[str] = []
 
 
+class ATSTailorRequest(BaseModel):
+    resume_text: str
+    jd_text: str
+    required_missing: list[str] = []
+    preferred_missing: list[str] = []
+
+
 @router.post("/ai-feedback")
 async def ai_feedback(body: ATSFeedbackRequest) -> JSONResponse:
     result = await generate_ats_feedback(body.model_dump())
     return JSONResponse(content=result)
+
+
+@router.post("/tailor")
+async def tailor_resume(body: ATSTailorRequest) -> JSONResponse:
+    """Rewrite specific resume bullets to incorporate missing ATS keywords.
+
+    Returns a list of {section, original, rewritten, keywords_added, rationale} objects.
+    Requires resume_text >= 50 chars and at least one missing keyword.
+    """
+    if len(body.resume_text.strip()) < 50:
+        raise HTTPException(400, "resume_text too short")
+    if not body.required_missing and not body.preferred_missing:
+        return JSONResponse(content={"suggestions": []})
+
+    suggestions = await generate_tailor_suggestions(
+        resume_text=body.resume_text,
+        jd_text=body.jd_text,
+        required_missing=body.required_missing,
+        preferred_missing=body.preferred_missing,
+    )
+    return JSONResponse(content={"suggestions": suggestions})
 
 
 @router.post("/analyze")
@@ -36,6 +65,8 @@ async def analyze(
 
     Supply either a file upload (.pdf, .docx, .txt) or a raw resume_text string.
     job_description is always required as a plain-text form field.
+    Also returns resume_text (extracted from file or passed directly) so the
+    client can use it for the resume tailor feature without re-uploading.
     """
     if not file and not resume_text:
         raise HTTPException(400, "Provide either a file or resume_text")
@@ -53,4 +84,5 @@ async def analyze(
             raise HTTPException(400, "resume_text too short")
 
     result = await analyze_resume(text, job_description)
+    result["resume_text"] = text   # included for resume tailor feature
     return JSONResponse(content=result)

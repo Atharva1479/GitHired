@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     # can be flaky). The agent loses data-lookup capability but
     # becomes much more reliable for empathy / general advice replies.
     ollama_use_tools: bool = True
+    # How long to keep the model in RAM after the last request.
+    # Accepts Ollama time strings: "60m", "1h", "30m", "0" (unload immediately).
+    # Override via OLLAMA_KEEP_ALIVE=... in .env
+    ollama_keep_alive: str = "60m"
 
     # Weekly email digest (via Resend)
     resend_api_key: SecretStr = SecretStr("")

@@ -1,99 +1,67 @@
 "use client";
 
-import { useDraggable } from "@dnd-kit/core";
-import { formatDistanceToNowStrict, parseISO } from "date-fns";
-import { Calendar, ExternalLink, MessageCircle } from "lucide-react";
+import { Calendar, Star } from "lucide-react";
 
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { companyAvatarClass, type Application } from "@/lib/types";
+import { type Application, companyAvatarClass } from "@/lib/types";
 
-export function Card({
-  app,
-  draggable = false,
-  overlay = false,
-  onOpen,
-}: {
+interface CardProps {
   app: Application;
-  draggable?: boolean;
-  overlay?: boolean;
-  onOpen?: (id: number) => void;
-}) {
-  const drag = useDraggable({ id: app.id, disabled: !draggable });
-  const appliedAgo = formatDistanceToNowStrict(parseISO(app.applied_date), {
-    addSuffix: true,
-  });
-  const initial = app.company.trim().charAt(0).toUpperCase() || "?";
+  dragging: boolean;
+  onOpen: () => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}
 
-  const style = drag.transform
-    ? {
-        transform: `translate3d(${drag.transform.x}px, ${drag.transform.y}px, 0)`,
-        opacity: drag.isDragging ? 0.4 : 1,
-      }
-    : undefined;
+export function Card({ app, dragging, onOpen, onDragStart, onDragEnd }: CardProps) {
+  const avatarClass = companyAvatarClass(app.company);
+  const initials = app.company.slice(0, 2).toUpperCase();
+  const date = new Date(app.applied_date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 
   return (
     <div
-      ref={draggable ? drag.setNodeRef : undefined}
-      style={style}
-      {...(draggable ? drag.listeners : {})}
-      {...(draggable ? drag.attributes : {})}
-      onClick={onOpen && !drag.isDragging ? () => onOpen(app.id) : undefined}
-      className={`group relative bg-[var(--color-surface)] rounded-xl ring-1 ring-[var(--color-border)] hover:ring-indigo-400 hover:shadow-md transition-all p-3.5 cursor-pointer select-none ${
-        overlay ? "shadow-xl rotate-[1.5deg]" : "shadow-sm"
-      }`}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      onClick={onOpen}
+      className="group rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5 shadow-sm cursor-grab select-none transition-all duration-150 hover:border-indigo-300 hover:shadow-md active:scale-[0.98] active:cursor-grabbing"
+      style={{ opacity: dragging ? 0.4 : 1 }}
     >
-      <div className="flex items-start gap-3">
-        <div
-          className={`shrink-0 w-9 h-9 rounded-lg grid place-items-center text-sm font-semibold ${companyAvatarClass(app.company)}`}
-          aria-hidden
-        >
-          {initial}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-[14px] font-semibold text-[var(--color-text)] truncate leading-tight">
-                {app.company}
-              </div>
-              <div className="text-[12.5px] text-[var(--color-text-2)] truncate mt-0.5">
-                {app.role}
-              </div>
-            </div>
-            {app.jd_url ? (
-              <a
-                href={app.jd_url}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="shrink-0 text-[var(--color-text-3)] hover:text-indigo-500 transition-colors"
-                aria-label="Open job description"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            ) : null}
-          </div>
+      <div className="flex items-center gap-2.5 mb-2.5">
+        <span className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold ${avatarClass}`}>
+          {initials}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-[var(--color-text)] truncate leading-tight">
+            {app.company}
+          </p>
+          <p className="text-[11.5px] text-[var(--color-text-3)] truncate leading-tight mt-0.5">
+            {app.role}
+          </p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--color-border)]">
-        <StatusBadge status={app.status} />
-        <div className="flex items-center gap-3 text-[11.5px] text-[var(--color-text-3)]">
-          {app.follow_up_count > 0 ? (
-            <span className="inline-flex items-center gap-1 text-amber-700">
-              <MessageCircle className="w-3 h-3" />
-              {app.follow_up_count}
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1 text-[11px] text-[var(--color-text-3)]">
+          <Calendar className="w-3 h-3 shrink-0" />
+          {date}
+        </span>
+        <div className="flex items-center gap-1.5">
+          {app.fit_score != null && (
+            <span className="flex items-center gap-0.5 text-[11px] font-medium text-amber-600 bg-amber-50 ring-1 ring-amber-200 rounded-full px-1.5 py-0.5">
+              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+              {app.fit_score}%
             </span>
-          ) : null}
-          <span className="inline-flex items-center gap-1">
-            <Calendar className="w-3 h-3" />
-            {appliedAgo}
+          )}
+          <span className="text-[10px] font-medium text-[var(--color-text-3)] bg-[var(--color-surface-2)] ring-1 ring-[var(--color-border)] rounded-full px-1.5 py-0.5">
+            {app.source}
           </span>
         </div>
-      </div>
-
-      <div className="mt-2 text-[10.5px] uppercase tracking-wide text-[var(--color-text-3)]">
-        via {app.source}
       </div>
     </div>
   );

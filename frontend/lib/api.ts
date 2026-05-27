@@ -274,6 +274,17 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ regenerate }),
       }),
+    applicationCoverLetter: (
+      id: number,
+      opts: { regenerate?: boolean; tone?: string } = {}
+    ) =>
+      request<Draft>(`/drafts/application/${id}/cover-letter`, {
+        method: "POST",
+        body: JSON.stringify({
+          regenerate: opts.regenerate ?? false,
+          tone: opts.tone ?? "professional",
+        }),
+      }),
     referralAsk: (id: number, regenerate = false) =>
       request<Draft>(`/drafts/referral/${id}/ask`, {
         method: "POST",

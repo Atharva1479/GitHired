@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "@/types/ats";
+import type { AnalysisResult, TailorResult } from "@/types/ats";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
@@ -39,4 +39,22 @@ export async function getAtsFeedback(result: AnalysisResult): Promise<ATSFeedbac
   });
   if (!res.ok) throw new Error(`AI feedback error ${res.status}`);
   return res.json() as Promise<ATSFeedback>;
+}
+
+export interface TailorRequest {
+  resume_text: string;
+  jd_text: string;
+  required_missing: string[];
+  preferred_missing: string[];
+}
+
+export async function tailorResume(body: TailorRequest): Promise<TailorResult> {
+  const res = await fetch(`${BASE}/ats/tailor`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Tailor error ${res.status}`);
+  return res.json() as Promise<TailorResult>;
 }

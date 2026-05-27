@@ -38,7 +38,7 @@ def start_scheduler() -> None:
     )
     _scheduler.add_job(
         _send_digest_sync,
-        CronTrigger(day_of_week="mon", hour=8, minute=0),
+        CronTrigger(day_of_week="sun", hour=8, minute=0),
         id="weekly_digest",
         max_instances=1,
         coalesce=True,

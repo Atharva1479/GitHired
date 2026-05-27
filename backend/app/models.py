@@ -26,7 +26,7 @@ NudgeSeverity = Literal["info", "due", "overdue"]
 
 DraftEntityType = Literal["application", "referral"]
 DraftType = Literal[
-    "followup_email", "referral_ask", "referral_followup", "weekly_summary"
+    "followup_email", "cover_letter", "referral_ask", "referral_followup", "weekly_summary"
 ]
 
 
@@ -143,6 +143,11 @@ class DraftOut(BaseModel):
 
 class DraftRequest(BaseModel):
     regenerate: bool = False
+
+
+class CoverLetterRequest(BaseModel):
+    regenerate: bool = False
+    tone: str = "professional"  # "professional" | "concise" | "enthusiastic"
 
 
 class ReferralOut(BaseModel):
