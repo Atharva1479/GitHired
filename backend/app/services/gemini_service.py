@@ -5,6 +5,9 @@ import structlog
 
 from app.config import settings
 from app.services import metrics
+from app.services.ollama_service import OllamaUnavailable
+from app.services.ollama_service import chat as ollama_chat
+from app.services.ollama_service import extract_text as ollama_extract_text
 
 log = structlog.get_logger("gemini")
 
@@ -83,57 +86,60 @@ def _ensure_model() -> genai.GenerativeModel:
 
 
 def build_followup_email_prompt(
-    company: str, role: str, days_elapsed: int, contact_name: str | None
+    company: str, role: str, days_elapsed: int,
+    contact_name: str | None, sender_name: str | None = None,
+    resume_text: str | None = None,
 ) -> str:
-    contact = contact_name or "Hiring Team"
-    greeting = f"Hi {contact}," if contact_name else f"Hi {company} team,"
+    greeting = f"Hi {contact_name}," if contact_name else "Hi Hiring Team,"
+    full_name = (sender_name or "").strip() or None
+    closer = f"Best,\\n{full_name}" if full_name else "Best,"
+    resume_block = (
+        f"\nCANDIDATE RESUME (use ONLY facts from here — never invent):\n{resume_text[:3000].strip()}\n"
+        if resume_text and resume_text.strip() else
+        "\nNo resume provided — use approach B (stay generic about experience) or C only.\n"
+    )
     return f"""{_SYSTEM}
 
-You are an elite career strategist. 97% of follow-up emails are deleted on sight because
-they all say the same thing: "I applied X days ago and haven't heard back." Yours will not.
-
-THE FUNDAMENTAL RULE: A follow-up email is not a status check. It is a second chance to
-demonstrate value. If you don't add something — a thought, an insight, a proof point —
-you are just adding noise to someone's inbox.
+Write a follow-up email for a job application. The ONLY goal is to remind them you exist
+while giving them one new reason to care. Not a status check. Not a nudge. A proof point.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 CONTEXT
-Company:       {company}
-Role:          {role}
-Days elapsed:  {days_elapsed}
+Company:      {company}
+Role:         {role}
+Days elapsed: {days_elapsed}
+{resume_block}
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
-STRUCTURE — 3 sentences maximum, 70 words maximum:
+STRUCTURE — exactly 3 sentences:
 
-SENTENCE 1 — THE HOOK (replaces the boring status opener)
-Do NOT open with "I applied X days ago." That is the sentence every recruiter skips.
-Instead, open with ONE of these approaches:
-  A) A specific insight about {company}'s product, stack, or challenge that you've
-     thought about since applying — and what you'd do about it.
-  B) A concrete achievement or recent work that maps directly to the {role}'s core need.
-  C) A brief statement that shows you understand what makes this role hard.
+SENTENCE 1 — THE PROOF POINT
+Pick the strongest achievement from the resume that maps to what a {role} at {company} needs.
+State it as a fact: "[What you built/achieved] at [company/project]."
+No preamble. No "I wanted to". Start with the achievement itself.
+If no resume: write one sentence showing you understand the hardest part of this specific role.
 
-SENTENCE 2 — THE ANCHOR
-Connect the hook back to your application. Confirm your interest is specific, not generic.
-One sentence. No superlatives. No "I would be a great fit."
+SENTENCE 2 — THE BRIDGE
+One sentence connecting that achievement to your application for this role.
+Must name {company} or the {role} specifically — cannot be copy-pasted to another company.
+No "I would be a great fit." No "I'm passionate about." No superlatives.
 
-SENTENCE 3 — THE ASK (low friction)
-Make it trivially easy for them to respond.
-Examples: "A quick yes or no on whether the role is still moving would help me plan."
-          "Happy to share [something specific] if that would help."
+SENTENCE 3 — THE ASK
+Frictionless. Binary. Easy to answer in 2 words.
+Use: "A quick yes/no on whether the role is still active would help me plan."
+Or: "Happy to share [name specific thing from resume] if it would help."
 NOT: "Please let me know if there are any updates at your convenience."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
-HARD CONSTRAINTS
-- Opener exactly: "{greeting}"
-- Closer exactly: "Best,\\n[Your name]"
-- 70 words maximum. No exceptions. Every extra word weakens it.
-- Zero apology for following up. You have done nothing wrong.
-- Zero generic enthusiasm ("excited about this opportunity").
-- Zero hedging ("I know you're busy").
-- If you cannot add genuine value in sentence 1, write less — not more filler.
+BANNED — any of these = rewrite:
+- "I remain interested" / "I am still interested"
+- "I wanted to follow up"
+- "likely requires" / "probably needs" / "I imagine" (speculation)
+- "I know you're busy" / "Hope this finds you well"
+- Any sentence that works equally well for a different company
+- More than 3 sentences
 
-Write only the email body.
+Write ONLY the 3-sentence body. Do not write the greeting or sign-off — those are added automatically.
 """
 
 
@@ -293,12 +299,15 @@ Output: cover letter body only, salutation through sign-off. No subject line. No
 
 
 def build_referral_ask_prompt(
-    name: str, company: str, target_role: str, mutual_context: str | None
+    name: str, company: str, target_role: str, mutual_context: str | None,
+    sender_name: str | None = None, jd_text: str | None = None,
 ) -> str:
+    full_name = (sender_name or "").strip() or None
+    closer = f"Best,\n{full_name}" if full_name else "Best,"
     context_block = (
         f"Relationship: {mutual_context}"
         if mutual_context
-        else f"Relationship: no prior connection — this is a cold ask."
+        else "Relationship: no prior connection — this is a cold ask."
     )
     cold_note = (
         ""
@@ -307,55 +316,61 @@ def build_referral_ask_prompt(
              f"{company} — a product, a technical problem they're solving, a team they're building. "
              "Not 'I've always admired your company.' Something that took 10 minutes to find.\n"
     )
+    jd_block = (
+        f"\nJOB DESCRIPTION (mine this for specific tech, requirements, and challenges — "
+        f"use at least one concrete detail in your message):\n{jd_text[:1500].strip()}\n"
+        if jd_text and jd_text.strip() else
+        f"\nNo JD available — use publicly known details about {company} or the {target_role} space.\n"
+    )
     return f"""{_SYSTEM}
 
 You are writing a LinkedIn DM that {name} will actually reply to.
-Most referral asks are deleted. Yours will not — because it respects their time,
-makes the ask specific, and makes it trivially easy to say yes or no.
+Most referral asks are deleted in 3 seconds. Yours will not — because it is specific,
+respects their time, and makes saying yes or no equally easy.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 CONTEXT
-Person:  {name} at {company}
-Role:    {target_role}
-{context_block}{cold_note}
+Person:        {name} at {company}
+Role:          {target_role}
+{context_block}{cold_note}{jd_block}
 ━━━━━━━━━━━━━━━━━━━━━━━━
-STRUCTURE — 3 sentences, 55 words maximum:
+STRUCTURE — 3 sentences, 60 words maximum:
 
-SENTENCE 1 — THE ANCHOR
-Warm outreach or cold: anchor on something real and specific.
-  • If you know them: reference the mutual context naturally. "We met at X" or "You helped me with Y."
-  • If cold: one concrete reason you want THIS company — their product direction, a specific technical
-    problem they're known for, or something they built. NOT "I've been following your work."
+SENTENCE 1 — THE ANCHOR (make it impossible to ignore)
+  • Warm: reference the real mutual context. One specific detail — not "we connected on LinkedIn."
+  • Cold: one concrete, researched detail about {company} or this role — a product decision,
+    a technical challenge from the JD, something they built. NOT "I've been following your work."
+    If the JD is provided, pull ONE specific requirement or tech stack detail and connect it
+    to something you've actually done. This is what separates your message from 50 others.
 
 SENTENCE 2 — THE DIRECT ASK
-State exactly what you want: a referral for the {target_role} role.
-Be direct. Do not soften it into ambiguity. "Would you be open to referring me
-for the {target_role} role?" is a complete sentence.
+State exactly what you want: a referral for the {target_role} role at {company}.
+"Would you be open to referring me for the {target_role} role?" is the whole sentence.
+Do not soften it. Do not hedge it. One clean ask.
 
 SENTENCE 3 — THE EASY OUT + OFFER
-Make yes and no both frictionless.
-Offer to send your resume and a short intro paragraph if they're up for it.
+Make yes and no both frictionless. Offer to send resume + short blurb.
 Acknowledge explicitly that it's fine if the timing or fit isn't right.
-Example: "Happy to send my resume and a short blurb — and totally fine if it's not the right time."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 HARD CONSTRAINTS
-- Opener exactly: "Hi {name},"
-- Closer: your initials only, on a new line. No "Best regards", no "Thanks!", no sign-off phrase.
-- 55 words maximum. Every word costs them attention. Spend it wisely.
-- LinkedIn DM register: conversational. No business-letter formality.
-- Do NOT open with flattery ("I've always admired", "I love what {company} is doing").
-- Do NOT say "passionate", "dedicated", "hardworking", or any self-descriptor.
-- Do NOT say "I came across your profile" or any variant.
-- Do NOT apologise for asking.
+- 60 words maximum for the 3 sentences.
+- LinkedIn DM register: direct and human. No business-letter formality.
+- No flattery ("I've always admired", "I love what {company} is doing").
+- No self-descriptors ("passionate", "dedicated", "hardworking").
+- No "I came across your profile" or any variant.
+- No apology for asking.
+- No placeholder text — write the actual specific detail, not "[mention their product]".
 
-Write only the DM body. No commentary.
+Write ONLY the 3-sentence body. Do not write the greeting or sign-off — those are added automatically.
 """
 
 
 def build_referral_followup_prompt(
-    name: str, company: str, days_since_msg: int
+    name: str, company: str, days_since_msg: int, sender_name: str | None = None,
 ) -> str:
+    full_name = (sender_name or "").strip() or None
+    closer = f"Best,\n{full_name}" if full_name else "Best,"
     urgency = (
         "It has been a short time — keep the tone light and genuinely low-pressure."
         if days_since_msg <= 5
@@ -388,14 +403,12 @@ Make it explicitly, warmly easy for them to say no or ignore this.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 HARD CONSTRAINTS
-- Opener exactly: "Hi {name},"
-- Closer: your initials only, on a new line. No sign-off phrase.
-- 30 words maximum. No exceptions.
+- 30 words maximum for the 2 sentences.
 - Do NOT say: "Just", "Following up", "Checking in", "I know you're busy",
   "Sorry to bother", "Thanks in advance", "Hope you're well", "Circling back".
 - Zero guilt. Zero pressure. Zero apology.
 
-Write only the DM body. No commentary.
+Write ONLY the 2-sentence body. Do not write the greeting or sign-off — those are added automatically.
 """
 
 
@@ -495,10 +508,26 @@ async def generate(prompt: str, *, max_output_tokens: int = 400) -> tuple[str, i
 async def generate_or_fallback(
     *, draft_type: str, prompt: str, **fb_kw: object
 ) -> tuple[str, str, int, int, bool]:
-    """Returns (content, model_name, p_tok, o_tok, fallback_flag)."""
+    """Returns (content, model_name, p_tok, o_tok, fallback_flag).
+
+    Priority: Gemini → Ollama (local) → hardcoded template.
+    fallback_flag is True only when the template is used (Ollama is still real AI).
+    """
     try:
         text, pt, ot = await generate(prompt)
         return text, settings.gemini_model, pt, ot, False
     except GeminiUnavailable:
         metrics.record_gemini(settings.gemini_model, "fallback")
-        return _fallback(draft_type, **fb_kw), "template", 0, 0, True
+
+    # Gemini unavailable — try local Ollama before falling back to template
+    try:
+        resp = await ollama_chat([{"role": "user", "content": prompt}], tools=None)
+        text = ollama_extract_text(resp)
+        if text:
+            log.info("draft.ollama_fallback", draft_type=draft_type, model=settings.ollama_model)
+            return text, settings.ollama_model, 0, 0, False
+    except OllamaUnavailable as e:
+        log.warning("draft.ollama_fallback_failed", error=str(e))
+
+    # Both AI providers unavailable — use hardcoded template
+    return _fallback(draft_type, **fb_kw), "template", 0, 0, True

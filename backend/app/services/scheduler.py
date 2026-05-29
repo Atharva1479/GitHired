@@ -44,6 +44,14 @@ def start_scheduler() -> None:
         coalesce=True,
         misfire_grace_time=3600,
     )
+    _scheduler.add_job(
+        _auto_ghost_sync,
+        CronTrigger(hour=1, minute=0),
+        id="auto_ghost",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
+    )
     _scheduler.start()
     log.info("scheduler.started cron_hour=%s", settings.nudge_cron_hour)
 
@@ -92,3 +100,25 @@ def _send_digest_sync() -> None:
         asyncio.run(send_weekly_digest_for_all())
     except Exception as e:  # noqa: BLE001
         log.exception("scheduler.digest_failed: %s", e)
+
+
+def _auto_ghost_sync() -> None:
+    try:
+        asyncio.run(_auto_ghost_async())
+    except Exception as e:  # noqa: BLE001
+        log.exception("scheduler.auto_ghost_failed: %s", e)
+
+
+async def _auto_ghost_async() -> None:
+    async with pool().acquire() as conn:
+        result = await conn.execute(
+            """
+            UPDATE applications
+            SET status = 'Ghosted', last_updated = now()
+            WHERE status = 'Applied'
+              AND deleted_at IS NULL
+              AND applied_date < now() - INTERVAL '7 days'
+            """,
+        )
+        count = int(result.split()[-1]) if result else 0
+        log.info("scheduler.auto_ghost updated=%s", count)

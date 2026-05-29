@@ -433,3 +433,26 @@ class InterviewReport(BaseModel):
     skill_breakdown: dict[str, Any]
     summary: str
     created_at: datetime
+
+
+class ResumeOut(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    role_tag: str
+    file_name: str
+    created_at: datetime
+
+
+class SkillGap(BaseModel):
+    skill: str
+    frequency: int
+    total_jobs: int
+
+
+class SkillGapResult(BaseModel):
+    resume_id: int
+    resume_name: str
+    role_tag: str
+    matched_jobs: int
+    gaps: list[SkillGap]

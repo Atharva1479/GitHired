@@ -5,6 +5,8 @@ import {
   BookOpenCheck,
   BrainCircuit,
   Briefcase,
+  ChevronDown,
+  FileText,
   LogOut,
   Mic,
   ScanText,
@@ -22,6 +24,60 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useLogout, useMe } from "@/hooks/useMe";
 import { useTodayNudges } from "@/hooks/useNudges";
 import { sfx } from "@/lib/sfx";
+
+const PREP_ITEMS = [
+  { href: "/study",     icon: BookOpenCheck, label: "Study",     desc: "Flashcards & plans" },
+  { href: "/dsa",       icon: BrainCircuit,  label: "DSA",       desc: "Algorithm practice" },
+  { href: "/ats",       icon: ScanText,      label: "ATS",       desc: "Resume scanner" },
+  { href: "/resumes",   icon: FileText,      label: "Skill Gap",  desc: "Resume & gap analysis" },
+  { href: "/interview", icon: Mic,           label: "Interview", desc: "AI mock interviews" },
+];
+
+function PrepDropdown() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[13.5px] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
+          open ? "bg-[var(--color-surface-2)] text-[var(--color-text)]" : "text-[var(--color-text-2)]"
+        }`}
+      >
+        Prep
+        <ChevronDown
+          className={`w-3.5 h-3.5 opacity-60 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-52 rounded-xl bg-[var(--color-surface)] shadow-xl ring-1 ring-[var(--color-border)] py-1.5 z-50 fade-up">
+          {PREP_ITEMS.map(({ href, icon: Icon, label, desc }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex items-center gap-3 px-3 py-2.5 text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
+              onClick={() => setOpen(false)}
+            >
+              <span className="shrink-0 w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                <Icon className="w-3.5 h-3.5 text-indigo-500" />
+              </span>
+              <span>
+                <span className="block text-[13px] font-medium leading-tight">{label}</span>
+                <span className="block text-[11px] text-[var(--color-text-3)] leading-tight mt-0.5">{desc}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function TopBar() {
   const today = useTodayNudges();
@@ -57,34 +113,7 @@ export function TopBar() {
           >
             Referrals
           </Link>
-          <Link
-            href="/study"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
-          >
-            <BookOpenCheck className="w-3.5 h-3.5" />
-            Study
-          </Link>
-          <Link
-            href="/dsa"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
-          >
-            <BrainCircuit className="w-3.5 h-3.5" />
-            DSA
-          </Link>
-          <Link
-            href="/ats"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
-          >
-            <ScanText className="w-3.5 h-3.5" />
-            ATS
-          </Link>
-          <Link
-            href="/interview"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
-          >
-            <Mic className="w-3.5 h-3.5" />
-            Interview
-          </Link>
+          <PrepDropdown />
           <Link
             href="/nudges"
             className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"

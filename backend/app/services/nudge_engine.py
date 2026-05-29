@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+﻿from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
@@ -33,7 +33,7 @@ def evaluate_application_rules(
             reference_id=app.id,
             severity="due",
             message=(
-                f"Follow up with **{app.company}** for **{app.role}** — "
+                f"Follow up with {app.company} for {app.role} â€” "
                 f"{days_since_applied} days, no response."
             ),
         )
@@ -46,7 +46,7 @@ def evaluate_application_rules(
             reference_id=app.id,
             severity="overdue",
             message=(
-                f"Consider marking **{app.company}** as Ghosted — "
+                f"Consider marking {app.company} as Ghosted â€” "
                 f"{days_since_applied} days without movement."
             ),
         )
@@ -59,7 +59,7 @@ def evaluate_application_rules(
             reference_id=app.id,
             severity="due",
             message=(
-                f"No update from **{app.company}** in {days_since_update} days. "
+                f"No update from {app.company} in {days_since_update} days. "
                 "Follow up?"
             ),
         )
@@ -79,7 +79,7 @@ def evaluate_referral_rules(
             reference_id=ref.id,
             severity="due",
             message=(
-                f"**{ref.name}** at **{ref.company}** likely accepted your invite. "
+                f"{ref.name} at {ref.company} likely accepted your invite. "
                 "Send the referral message."
             ),
         )
@@ -92,7 +92,7 @@ def evaluate_referral_rules(
             reference_id=ref.id,
             severity="info",
             message=(
-                f"**{ref.name}** hasn't accepted in {days_since_sent} days. "
+                f"{ref.name} hasn't accepted in {days_since_sent} days. "
                 "Try an alternate contact or move on."
             ),
         )
@@ -105,7 +105,7 @@ def evaluate_referral_rules(
             reference_id=ref.id,
             severity="due",
             message=(
-                f"You haven't messaged **{ref.name}** at **{ref.company}** yet. "
+                f"You haven't messaged {ref.name} at {ref.company} yet. "
                 "Send the ask."
             ),
         )
@@ -123,7 +123,7 @@ def evaluate_referral_rules(
             reference_id=ref.id,
             severity="due",
             message=(
-                f"No reply from **{ref.name}** at **{ref.company}** "
+                f"No reply from {ref.name} at {ref.company} "
                 f"in {days_since_msg} days. Send a gentle follow-up."
             ),
         )
@@ -138,7 +138,7 @@ def evaluate_weekly_volume(weekly_count: int) -> Iterable[NudgeCandidate]:
             reference_id=None,
             severity="info",
             message=(
-                f"You've applied to **{weekly_count}** role"
+                f"You've applied to {weekly_count} role"
                 f"{'s' if weekly_count != 1 else ''} this week. Aim for 5+."
             ),
         )
@@ -170,3 +170,4 @@ async def run_all_checks(
             fired_on_date=today,
         )
     return inserted
+

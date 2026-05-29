@@ -38,13 +38,18 @@ def _keyword_in_text(kw: str, text: str, alias_map: dict[str, str]) -> bool:
 
 
 def positional_keyword_score(
-    keywords: dict, resume_parsed: dict, synonym_map: dict
+    keywords: dict, resume_parsed: dict, synonym_map: dict,
+    recent_experience_text: str = "",
 ) -> dict:
     # Build alias → canonical map
     alias_map: dict[str, str] = {}
     for canonical, aliases in synonym_map.items():
         for alias in aliases:
             alias_map[alias.lower()] = canonical
+
+    # Full resume text (lowercased) for density counting
+    resume_lower = " ".join(str(v) for v in resume_parsed.values() if v).lower()
+    recent_lower = recent_experience_text.lower()
 
     earned = 0.0
     max_possible = 0.0
@@ -71,7 +76,23 @@ def positional_keyword_score(
             max_possible += possible
 
             if best_section:
-                earned += type_weight * best_pos
+                # --- Density multiplier ---
+                kw_lower = kw.lower()
+                freq = resume_lower.count(kw_lower)
+                if freq <= 1:
+                    density_mult = 1.0
+                elif freq == 2:
+                    density_mult = 1.2
+                else:
+                    density_mult = min(1.4, 1.0 + 0.15 * freq)
+
+                # --- Recency multiplier ---
+                if best_section == "experience" and recent_lower:
+                    recency_mult = 1.25 if kw_lower in recent_lower else 0.80
+                else:
+                    recency_mult = 1.0
+
+                earned += type_weight * best_pos * density_mult * recency_mult
                 matched_keywords[kw] = {"section": best_section, "type": kw_type}
             else:
                 missing_keywords[kw] = {"type": kw_type}

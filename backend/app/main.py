@@ -19,6 +19,7 @@ from app.routers import gamify as gamify_router
 from app.routers import nudges as nudges_router
 from app.routers import pilot as pilot_router
 from app.routers import referrals as referrals_router
+from app.routers import resumes as resumes_router
 from app.routers import study as study_router
 from app.routers import dsa as dsa_router
 from app.routers import analytics as analytics_router
@@ -162,6 +163,7 @@ app.include_router(
 )
 app.include_router(ats_router.router, prefix="/api/ats", tags=["ATS"])
 app.include_router(interview_router.router, prefix="/api/interview", tags=["Interview"])
+app.include_router(resumes_router.router, prefix="/api", tags=["Resumes"])
 
 
 @app.get("/healthz", tags=["Health"])

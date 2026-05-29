@@ -26,10 +26,10 @@ import type { AnalysisResult, CategoryScore, TailorSuggestion } from "@/types/at
 /* ── helpers ──────────────────────────────────────────────────────── */
 
 function verdict(score: number): { label: string; cls: string } {
-  if (score >= 80) return { label: "Strong Match",  cls: "bg-emerald-500/10 text-emerald-600 ring-emerald-300/40" };
-  if (score >= 65) return { label: "Good Match",    cls: "bg-blue-500/10    text-blue-600    ring-blue-300/40"    };
-  if (score >= 50) return { label: "Fair Match",    cls: "bg-amber-500/10   text-amber-600   ring-amber-300/40"  };
-  return               { label: "Needs Work",    cls: "bg-red-500/10     text-red-600     ring-red-300/40"    };
+  if (score >= 80) return { label: "Strong Match",  cls: "bg-emerald-500/10 text-emerald-500 ring-emerald-400/20" };
+  if (score >= 65) return { label: "Good Match",    cls: "bg-blue-500/10    text-blue-400    ring-blue-400/20"    };
+  if (score >= 50) return { label: "Fair Match",    cls: "bg-amber-500/10   text-amber-500   ring-amber-400/20"  };
+  return               { label: "Needs Work",    cls: "bg-red-500/10     text-red-400     ring-red-400/20"    };
 }
 
 
@@ -48,9 +48,9 @@ function scoreText(score: number) {
 const ML_KEYS = new Set(["semantic_sentence", "word_semantic"]);
 
 const SECTION_PILL: Record<string, string> = {
-  skills:     "bg-emerald-500/10 text-emerald-700 ring-emerald-300/40",
-  experience: "bg-blue-500/10    text-blue-700    ring-blue-300/40",
-  summary:    "bg-violet-500/10  text-violet-700  ring-violet-300/40",
+  skills:     "bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-400/20",
+  experience: "bg-blue-500/10    text-blue-400    ring-1 ring-blue-400/20",
+  summary:    "bg-violet-500/10  text-violet-400  ring-1 ring-violet-400/20",
 };
 function sectionPill(sec: string) {
   return SECTION_PILL[sec.toLowerCase()] ?? "bg-[var(--color-surface-2)] text-[var(--color-text-2)] ring-[var(--color-border)]";
@@ -187,7 +187,7 @@ export default function AtsResultsPage() {
                   </span>
                 ) : null}
                 {ml_status.word_semantic_active ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 ring-1 ring-violet-300/40">
+                  <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 ring-1 ring-violet-400/20">
                     <Cpu className="w-3 h-3" />Word2Vec
                   </span>
                 ) : null}
@@ -263,7 +263,7 @@ export default function AtsResultsPage() {
                       <div className="flex items-center gap-1.5">
                         <span className="text-[13px] font-medium text-[var(--color-text)]">{cat.label}</span>
                         {ML_KEYS.has(key) && (
-                          <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 ring-1 ring-violet-300/40 uppercase tracking-wide">ML</span>
+                          <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 ring-1 ring-violet-400/20 uppercase tracking-wide">ML</span>
                         )}
                         <span className="text-[10.5px] text-[var(--color-text-3)]">{cat.weight}%</span>
                       </div>
@@ -292,7 +292,7 @@ export default function AtsResultsPage() {
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.values(bySection).flat().slice(0, 16).map((kw) => (
-                  <span key={kw} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-300/40">
+                  <span key={kw} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-400/20">
                     <CheckCircle2 className="w-2.5 h-2.5" />{kw}
                   </span>
                 ))}
@@ -316,7 +316,7 @@ export default function AtsResultsPage() {
                       <p className="text-[10px] uppercase tracking-wider text-red-500 font-semibold mb-1">Required</p>
                       <div className="flex flex-wrap gap-1.5">
                         {required_missing.map((kw) => (
-                          <span key={kw} className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-500/10 text-red-600 ring-1 ring-red-300/40">
+                          <span key={kw} className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-500/10 text-red-400 ring-1 ring-red-400/20">
                             {kw}
                           </span>
                         ))}
@@ -325,10 +325,10 @@ export default function AtsResultsPage() {
                   )}
                   {preferred_missing.length > 0 && (
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-amber-600 font-semibold mb-1">Preferred</p>
+                      <p className="text-[10px] uppercase tracking-wider text-amber-500 font-semibold mb-1">Preferred</p>
                       <div className="flex flex-wrap gap-1.5">
                         {preferred_missing.map((kw) => (
-                          <span key={kw} className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-700 ring-1 ring-amber-300/40">
+                          <span key={kw} className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-500 ring-1 ring-amber-400/20">
                             {kw}
                           </span>
                         ))}
@@ -404,10 +404,10 @@ export default function AtsResultsPage() {
             <div className="space-y-4">
               {synonym_matches.length > 0 && (
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 mb-2">Synonym Matches</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-500 mb-2">Synonym Matches</p>
                   <div className="flex flex-wrap gap-2">
                     {synonym_matches.map((s, i) => (
-                      <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] ring-1 bg-amber-500/10 text-amber-700 ring-amber-300/40">
+                      <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] ring-1 bg-amber-500/10 text-amber-500 ring-amber-400/20">
                         <span className="font-semibold">{s.matched_alias}</span>
                         <span className="text-amber-400">→</span>
                         <span>{s.keyword}</span>
@@ -418,10 +418,10 @@ export default function AtsResultsPage() {
               )}
               {word_semantic_matches.slice(0, 10).length > 0 && (
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600 mb-2">Word Semantic Matches</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-400 mb-2">Word Semantic Matches</p>
                   <div className="flex flex-wrap gap-2">
                     {word_semantic_matches.slice(0, 10).map((m, i) => (
-                      <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] ring-1 bg-violet-500/10 text-violet-700 ring-violet-300/40">
+                      <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] ring-1 bg-violet-500/10 text-violet-400 ring-violet-400/20">
                         <span className="font-semibold">{m.resume_term}</span>
                         <span className="text-violet-400">≈</span>
                         <span>{m.jd_term}</span>
@@ -456,9 +456,9 @@ export default function AtsResultsPage() {
                       <p className="text-[12.5px] text-[var(--color-text)] line-clamp-2">{m.jd}</p>
                     </div>
                     <span className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                      m.similarity >= 0.8 ? "bg-emerald-500/10 text-emerald-600" :
-                      m.similarity >= 0.6 ? "bg-amber-500/10 text-amber-600" :
-                      "bg-violet-500/10 text-violet-600"
+                      m.similarity >= 0.8 ? "bg-emerald-500/10 text-emerald-500" :
+                      m.similarity >= 0.6 ? "bg-amber-500/10 text-amber-500" :
+                      "bg-violet-500/10 text-violet-400"
                     }`}>
                       {Math.round(m.similarity * 100)}% match
                     </span>
@@ -489,10 +489,10 @@ export default function AtsResultsPage() {
 
               {/* Strengths + Weaknesses side by side — always compact */}
               <div className="grid sm:grid-cols-2 gap-3">
-                <div className="rounded-xl bg-emerald-500/5 ring-1 ring-emerald-300/30 p-4">
+                <div className="rounded-xl bg-emerald-500/5 ring-1 ring-emerald-400/20 p-4">
                   <div className="flex items-center gap-1.5 mb-3">
                     <ThumbsUp className="w-3.5 h-3.5 text-emerald-500" />
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-600">Strengths</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-500">Strengths</p>
                   </div>
                   <ul className="space-y-2">
                     {feedback.strengths.map((s, i) => (
@@ -504,7 +504,7 @@ export default function AtsResultsPage() {
                   </ul>
                 </div>
 
-                <div className="rounded-xl bg-red-500/5 ring-1 ring-red-300/30 p-4">
+                <div className="rounded-xl bg-red-500/5 ring-1 ring-red-400/20 p-4">
                   <div className="flex items-center gap-1.5 mb-3">
                     <TrendingUp className="w-3.5 h-3.5 text-red-500" />
                     <p className="text-[11px] font-bold uppercase tracking-wide text-red-500">Weaknesses</p>
@@ -524,15 +524,15 @@ export default function AtsResultsPage() {
               <div>
                 <div className="flex items-center gap-1.5 mb-3">
                   <Lightbulb className="w-3.5 h-3.5 text-blue-500" />
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-blue-600">Suggestions</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-blue-400">Suggestions</p>
                 </div>
                 <div className="space-y-2">
                   {feedback.suggestions.map((s, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-3 rounded-lg bg-blue-500/5 ring-1 ring-blue-300/30 px-4 py-3"
+                      className="flex items-start gap-3 rounded-lg bg-blue-500/5 ring-1 ring-blue-400/20 px-4 py-3"
                     >
-                      <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500/15 text-blue-600 text-[11px] font-bold grid place-items-center mt-0.5">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500/15 text-blue-400 text-[11px] font-bold grid place-items-center mt-0.5">
                         {i + 1}
                       </span>
                       <p className="text-[13px] text-[var(--color-text-2)] leading-snug">{s}</p>
@@ -620,10 +620,10 @@ function StatCard({
   tone: "green" | "red" | "amber" | "blue";
 }) {
   const toneMap = {
-    green: "bg-emerald-500/8  text-emerald-600",
-    red:   "bg-red-500/8     text-red-600",
-    amber: "bg-amber-500/8   text-amber-600",
-    blue:  "bg-blue-500/8    text-blue-600",
+    green: "bg-emerald-500/10 text-emerald-500",
+    red:   "bg-red-500/10    text-red-400",
+    amber: "bg-amber-500/10  text-amber-500",
+    blue:  "bg-blue-500/10   text-blue-400",
   };
   return (
     <div className={`rounded-xl px-3 py-3 ${toneMap[tone]}`}>

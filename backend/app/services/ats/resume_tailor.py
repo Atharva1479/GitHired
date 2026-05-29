@@ -92,13 +92,21 @@ EXAMPLES — study these before generating:
 
 _SELECTION_STRATEGY = """\
 SELECTION STRATEGY:
-1. Scan Experience and Projects sections for action bullets (lines with strong verbs).
-2. For each required missing keyword, find the ONE bullet that most plausibly relates to it.
-   Match by domain: "deployed services" -> Docker/Kubernetes/AWS; "analyzed data" -> SQL/Pandas.
-3. Prefer technically-rich bullets — they have the most room for natural keyword insertion.
-4. If a bullet cannot accept a keyword without hallucination, skip it entirely.
-5. Never include the same original bullet twice.
-6. Target 3-5 rewrites. Fewer high-quality rewrites beat many weak ones."""
+1. Scan ALL sections of the resume for improvable content:
+   - Experience: action bullets with strong verbs — best candidates
+   - Projects: technical project descriptions — excellent for adding stack keywords
+   - Summary/Profile: 2-3 line intro — good for adding role-level or methodology keywords
+   - Skills: if listed as prose (not a comma list), rewrite to include missing skills naturally
+   - Certifications/Education: only if the missing keyword is a certification or degree type
+2. For each required missing keyword, find the ONE line/bullet across ANY section that most
+   plausibly relates to it. Match by domain:
+   "deployed services" -> Docker/Kubernetes/AWS in Experience or Projects;
+   "analytical skills" -> Summary; unlisted framework -> Skills section.
+3. Prefer technically-rich bullets in Experience/Projects — they have the most room.
+   Fall back to Summary or Skills only when Experience/Projects have no plausible match.
+4. If a line cannot accept a keyword without hallucination, skip it entirely.
+5. Never include the same original line twice.
+6. Target 3-6 rewrites across all sections. Fewer high-quality rewrites beat many weak ones."""
 
 
 def _build_prompt(
@@ -148,15 +156,15 @@ MISSING PREFERRED KEYWORDS (add only when a bullet has natural room):
 OUTPUT — a JSON array, first character must be `[`:
 [
   {{
-    "section": "Experience",
-    "original": "<verbatim bullet copied from the resume above>",
-    "rewritten": "<improved bullet with keywords woven in naturally>",
+    "section": "<actual section name: Experience | Projects | Summary | Skills | Certifications | Education>",
+    "original": "<verbatim line copied from the resume above — must be an exact substring>",
+    "rewritten": "<improved line with keywords woven in naturally>",
     "keywords_added": ["keyword1"],
-    "rationale": "<one sentence: why this bullet and how the keyword fits naturally>"
+    "rationale": "<one sentence: why this line across any section and how the keyword fits naturally>"
   }}
 ]
 
-If no bullet can be honestly improved, return: []
+If no line across any section can be honestly improved, return: []
 """
 
 
@@ -201,14 +209,14 @@ def _static_fallback(
     _framework = {"FastAPI", "Django", "Flask", "React", "Next.js", "Node.js", "Spring"}
     _method = {"Agile", "Scrum", "Kanban", "TDD", "CI/CD", "DevOps", "MLOps"}
 
-    def _bucket(kw: str) -> str:
-        if kw in _cloud:       return "cloud platform"
-        if kw in _container:   return "container technology"
-        if kw in _db:          return "database"
-        if kw in _lang:        return "programming language"
-        if kw in _framework:   return "framework"
-        if kw in _method:      return "methodology"
-        return "technology"
+    def _bucket(kw: str) -> tuple[str, str]:
+        if kw in _cloud:       return "cloud platform",    "Experience or Projects"
+        if kw in _container:   return "container tech",    "Experience or Projects"
+        if kw in _db:          return "database",          "Experience or Skills"
+        if kw in _lang:        return "language",          "Skills or Experience"
+        if kw in _framework:   return "framework",         "Experience or Skills"
+        if kw in _method:      return "methodology",       "Summary or Experience"
+        return                        "technology",         "Experience or Skills"
 
     all_missing = (
         [(k, "required") for k in required_missing[:4]] +
@@ -216,19 +224,19 @@ def _static_fallback(
     )
     suggestions = []
     for kw, tier in all_missing:
-        bucket = _bucket(kw)
+        bucket, section_hint = _bucket(kw)
         suggestions.append({
-            "section": "Experience",
-            "original": f"[Find your most relevant Experience bullet related to {bucket}]",
+            "section": section_hint.split(" or ")[0],
+            "original": f"[Find your most relevant {section_hint} line related to {bucket}]",
             "rewritten": (
-                f"[Add '{kw}' to that bullet naturally — e.g. 'built X using {kw}', "
+                f"[Add '{kw}' to that line naturally — e.g. 'built X using {kw}', "
                 f"'deployed X on {kw}', or 'with {kw} integration']"
             ),
             "keywords_added": [kw],
             "rationale": (
                 f"'{kw}' is a {'required' if tier == 'required' else 'preferred'} "
-                f"keyword missing from your resume. Adding it to a related {bucket} "
-                f"bullet will improve your ATS keyword match score."
+                f"keyword missing from your resume. Adding it to a {bucket} line in "
+                f"{section_hint} will improve your ATS keyword match score."
             ),
         })
     return suggestions

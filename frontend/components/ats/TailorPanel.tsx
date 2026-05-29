@@ -33,7 +33,7 @@ function HighlightedText({ text, keywords }: { text: string; keywords: string[] 
     <>
       {parts.map((part, i) =>
         pattern.test(part) ? (
-          <mark key={i} className="bg-emerald-100 text-emerald-800 rounded px-0.5 font-semibold not-italic">
+          <mark key={i} className="bg-emerald-500/15 text-emerald-400 rounded px-0.5 font-semibold not-italic">
             {part}
           </mark>
         ) : (
@@ -73,7 +73,7 @@ function SuggestionCard({ s, index }: { s: TailorSuggestion; index: number }) {
             {s.section} · #{index + 1}
           </span>
           {s.keywords_added.map((kw) => (
-            <span key={kw} className="text-[10.5px] font-semibold bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 rounded-full px-2 py-0.5">
+            <span key={kw} className="text-[10.5px] font-semibold bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-400/20 rounded-full px-2 py-0.5">
               +{kw}
             </span>
           ))}
@@ -82,19 +82,19 @@ function SuggestionCard({ s, index }: { s: TailorSuggestion; index: number }) {
           {s.rationale && (
             <button
               onClick={() => setShowRationale((v) => !v)}
-              className="p-1 rounded-md text-[var(--color-text-3)] hover:text-indigo-500 hover:bg-indigo-50 transition-colors"
+              className="p-1 rounded-md text-[var(--color-text-3)] hover:text-indigo-500 hover:bg-indigo-500/10 transition-colors"
               title="Why this bullet?"
             >
               <Info className="w-3.5 h-3.5" />
             </button>
           )}
-          <CopyBtn text={s.rewritten} className="text-[11px] text-[var(--color-text-3)] hover:text-indigo-500 px-2 py-1 rounded-md hover:bg-indigo-50" />
+          <CopyBtn text={s.rewritten} className="text-[11px] text-[var(--color-text-3)] hover:text-indigo-500 px-2 py-1 rounded-md hover:bg-indigo-500/10" />
         </div>
       </div>
 
       {showRationale && s.rationale && (
-        <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100">
-          <p className="text-[11.5px] text-indigo-700 leading-relaxed">{s.rationale}</p>
+        <div className="px-4 py-2 bg-indigo-500/5 border-b border-indigo-400/20">
+          <p className="text-[11.5px] text-indigo-400 leading-relaxed">{s.rationale}</p>
         </div>
       )}
 
@@ -108,7 +108,7 @@ function SuggestionCard({ s, index }: { s: TailorSuggestion; index: number }) {
 
       {/* After */}
       <div className="px-4 py-3 bg-emerald-500/[0.04]">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-1.5">After</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1.5">After</p>
         <p className="text-[13px] text-[var(--color-text)] leading-relaxed font-[450]">
           <HighlightedText text={s.rewritten} keywords={s.keywords_added} />
         </p>
@@ -125,13 +125,13 @@ function UpdatedResumePanel({ resumeText, suggestions }: { resumeText: string; s
   ).length;
 
   return (
-    <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 overflow-hidden">
+    <div className="rounded-xl border border-indigo-400/20 bg-indigo-500/5 overflow-hidden">
       {/* Header — always visible */}
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
           <div>
-            <p className="text-[13px] font-semibold text-indigo-800">Updated resume text</p>
+            <p className="text-[13px] font-semibold text-[var(--color-text)]">Updated resume text</p>
             <p className="text-[11.5px] text-indigo-500">
               All {changeCount} rewrite{changeCount !== 1 ? "s" : ""} applied — paste into your Google Doc or Word file
             </p>
@@ -141,11 +141,11 @@ function UpdatedResumePanel({ resumeText, suggestions }: { resumeText: string; s
           <CopyBtn
             text={updatedText}
             label="Copy full resume"
-            className="text-[12px] text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg bg-indigo-100 hover:bg-indigo-200"
+            className="text-[12px] text-indigo-400 hover:text-indigo-300 px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/15"
           />
           <button
             onClick={() => setOpen((v) => !v)}
-            className="p-1.5 rounded-lg text-indigo-500 hover:bg-indigo-100 transition-colors"
+            className="p-1.5 rounded-lg text-indigo-400 hover:bg-indigo-500/10 transition-colors"
             title={open ? "Collapse" : "Preview"}
           >
             {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -155,14 +155,14 @@ function UpdatedResumePanel({ resumeText, suggestions }: { resumeText: string; s
 
       {/* Expandable preview */}
       {open && (
-        <div className="border-t border-indigo-200 px-4 pb-4 pt-3">
+        <div className="border-t border-indigo-400/20 px-4 pb-4 pt-3">
           <textarea
             readOnly
             value={updatedText}
             rows={Math.min(20, updatedText.split("\n").length + 2)}
-            className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2.5 text-[12.5px] text-[var(--color-text)] font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm"
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5 text-[12.5px] text-[var(--color-text)] font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm"
           />
-          <p className="text-[10.5px] text-indigo-400 mt-2">
+          <p className="text-[10.5px] text-[var(--color-text-3)] mt-2">
             Tip: Select all (Ctrl+A) inside the box then copy, or use the "Copy full resume" button above.
           </p>
         </div>
@@ -202,9 +202,9 @@ export function TailorPanel({ suggestions, loading, error, resumeText, onRetry }
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-center space-y-2">
-        <p className="text-[13px] text-red-700">{error}</p>
-        <button onClick={onRetry} className="text-[12px] font-semibold text-red-600 hover:underline">Try again</button>
+      <div className="rounded-xl border border-red-400/20 bg-red-500/5 px-5 py-4 text-center space-y-2">
+        <p className="text-[13px] text-red-400">{error}</p>
+        <button onClick={onRetry} className="text-[12px] font-semibold text-red-400 hover:underline">Try again</button>
       </div>
     );
   }

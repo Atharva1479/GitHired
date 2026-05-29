@@ -55,14 +55,14 @@ const LOADING_STEPS = [
 ];
 
 const KW_COLORS = [
-  "bg-indigo-100 text-indigo-700 ring-indigo-200/80",
-  "bg-emerald-100 text-emerald-700 ring-emerald-200/80",
-  "bg-violet-100 text-violet-700 ring-violet-200/80",
-  "bg-amber-100 text-amber-700 ring-amber-200/80",
-  "bg-blue-100 text-blue-700 ring-blue-200/80",
-  "bg-rose-100 text-rose-700 ring-rose-200/80",
-  "bg-teal-100 text-teal-700 ring-teal-200/80",
-  "bg-sky-100 text-sky-700 ring-sky-200/80",
+  "bg-indigo-500/10 text-indigo-400 ring-indigo-400/30",
+  "bg-emerald-500/10 text-emerald-400 ring-emerald-400/30",
+  "bg-violet-500/10 text-violet-400 ring-violet-400/30",
+  "bg-amber-500/10 text-amber-400 ring-amber-400/30",
+  "bg-blue-500/10 text-blue-400 ring-blue-400/30",
+  "bg-rose-500/10 text-rose-400 ring-rose-400/30",
+  "bg-teal-500/10 text-teal-400 ring-teal-400/30",
+  "bg-sky-500/10 text-sky-400 ring-sky-400/30",
 ];
 
 const POSITIONS = [
@@ -241,55 +241,48 @@ export default function AtsPage() {
 
   return (
     <AppShell>
-      {/* ── gradient page background ──────────────────────────────── */}
-      <div className="relative min-h-[calc(100dvh-56px)] overflow-hidden">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10"
-          style={{
-            background:
-              "radial-gradient(ellipse 90% 55% at 50% -5%, rgba(99,102,241,0.13) 0%, transparent 55%), radial-gradient(ellipse 55% 40% at 90% 15%, rgba(139,92,246,0.09) 0%, transparent 50%)",
-          }}
-        />
+      <div className="flex flex-col min-h-[calc(100vh-56px)]">
 
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-10 pb-16">
-
-          {/* ── hero headline ─────────────────────────────────────── */}
-          {step === "resume" && (
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-600 text-white mb-4 shadow-lg shadow-indigo-500/30">
-                <ScanText className="w-6 h-6" />
-              </div>
-              <h1 className="text-[28px] sm:text-[34px] font-bold tracking-tight text-[var(--color-text)]">
-                ATS Resume Scanner
-              </h1>
-              <p className="mt-2 text-[14px] text-[var(--color-text-3)] max-w-sm mx-auto">
-                See how well your resume matches a job — keyword coverage, skill gaps, and actionable tips.
-              </p>
-              {/* Feature pills */}
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                {["Know before you apply", "Spot every missing keyword", "Fix what's filtering you out"].map((f) => (
-                  <span key={f} className="inline-flex items-center gap-1 text-[11.5px] font-medium px-2.5 py-1 rounded-full bg-[var(--color-surface)] ring-1 ring-[var(--color-border)] text-[var(--color-text-2)]">
-                    <Sparkles className="w-3 h-3 text-indigo-500" />
-                    {f}
-                  </span>
-                ))}
-              </div>
+        {/* ── Hero ── */}
+        <div className="relative overflow-hidden shrink-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-600/15 via-indigo-600/4 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(99,102,241,0.12),transparent)] pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_55%_40%_at_90%_15%,rgba(139,92,246,0.08),transparent)] pointer-events-none" />
+          <div className="relative text-center px-6 pt-12 pb-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-500/40 mb-5">
+              <ScanText className="w-8 h-8 text-white" />
             </div>
-          )}
 
-          {step === "jd" && (
-            <div className="text-center mb-6">
-              <h1 className="text-[24px] font-bold tracking-tight text-[var(--color-text)]">
-                Now add the job description
-              </h1>
-              <p className="mt-1 text-[13.5px] text-[var(--color-text-3)]">
-                More text = more keywords = better analysis.
-              </p>
-            </div>
-          )}
+            {step === "resume" ? (
+              <>
+                <h1 className="text-3xl font-bold tracking-tight">ATS Resume Scanner</h1>
+                <p className="text-[var(--color-text-2)] mt-2 text-sm max-w-xs mx-auto leading-relaxed">
+                  See exactly how your resume scores against a job — keyword gaps, skill misses, actionable fixes.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  {["Know before you apply", "Spot every missing keyword", "Fix what's filtering you out"].map((f) => (
+                    <span key={f} className="inline-flex items-center gap-1 text-[11.5px] font-medium px-2.5 py-1 rounded-full bg-[var(--color-surface)]/60 ring-1 ring-[var(--color-border)] text-[var(--color-text-2)]">
+                      <Sparkles className="w-3 h-3 text-indigo-400" />
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h1 className="text-3xl font-bold tracking-tight">Add the job description</h1>
+                <p className="text-[var(--color-text-2)] mt-2 text-sm max-w-xs mx-auto leading-relaxed">
+                  More text = more keywords detected = better analysis.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
 
-          {/* ── step indicator ────────────────────────────────────── */}
+        {/* ── Form ── */}
+        <div className="flex-1 max-w-2xl w-full mx-auto px-4 sm:px-6 py-8">
+
+          {/* ── step indicator ──────────────────────────────────── */}
           <div className="flex items-center gap-3 mb-6">
             <StepDot n={1} active={step === "resume"} done={step === "jd"} label="Upload Resume" />
             {step === "jd" && (
@@ -339,10 +332,10 @@ export default function AtsPage() {
                       onClick={() => fileInputRef.current?.click()}
                       className={`cursor-pointer rounded-2xl border-2 border-dashed py-14 px-6 text-center transition-all duration-200 ${
                         dragging
-                          ? "border-indigo-500 bg-indigo-500/8 scale-[1.01]"
+                          ? "border-indigo-500 bg-indigo-500/10 scale-[1.01]"
                           : file
-                          ? "border-emerald-400 bg-emerald-500/5"
-                          : "border-[var(--color-border-2)] bg-[var(--color-surface-2)] hover:border-indigo-400 hover:bg-indigo-500/5"
+                          ? "border-emerald-500/50 bg-emerald-500/5"
+                          : "border-[var(--color-border)] bg-[var(--color-surface-2)] hover:border-indigo-400/60 hover:bg-indigo-500/5"
                       }`}
                     >
                       <input

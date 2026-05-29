@@ -115,19 +115,19 @@ export function CoverLetterModal({
           <div className="flex gap-2">
             {/* Resume status */}
             {hasResume ? (
-              <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/8 border border-emerald-200 px-3 py-2 text-[12px] text-emerald-700 flex-1">
+              <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-[12px] text-emerald-500 flex-1">
                 <FileText className="w-3.5 h-3.5 shrink-0" />
                 Resume uploaded — AI will read it automatically
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[12px] text-amber-700 flex-1">
+              <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-[12px] text-amber-500 flex-1">
                 <Upload className="w-3.5 h-3.5 shrink-0" />
                 No resume uploaded — upload one for a personalised letter
               </div>
             )}
             {/* JD status */}
             {!hasJd && (
-              <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[12px] text-amber-700 flex-1">
+              <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-[12px] text-amber-500 flex-1">
                 No JD saved — letter will be role-based only
               </div>
             )}
@@ -145,11 +145,11 @@ export function CoverLetterModal({
                   onClick={() => setTone(t.value)}
                   className={`flex-1 rounded-lg border px-3 py-2 text-left transition-colors ${
                     tone === t.value
-                      ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-300/60"
-                      : "border-[var(--color-border)] hover:border-indigo-300 bg-[var(--color-surface-2)]"
+                      ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-400/30"
+                      : "border-[var(--color-border)] hover:border-indigo-400 bg-[var(--color-surface-2)]"
                   }`}
                 >
-                  <p className={`text-[12px] font-semibold ${tone === t.value ? "text-indigo-700" : "text-[var(--color-text)]"}`}>
+                  <p className={`text-[12px] font-semibold ${tone === t.value ? "text-indigo-400" : "text-[var(--color-text)]"}`}>
                     {t.label}
                   </p>
                   <p className="text-[10.5px] text-[var(--color-text-3)] mt-0.5">{t.desc}</p>

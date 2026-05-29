@@ -36,12 +36,12 @@ function SavedToast({ visible }: { visible: boolean }) {
   return (
     <div
       aria-live="polite"
-      className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-white px-4 py-3 shadow-lg transition-all duration-300 ${
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-[var(--color-surface)] px-4 py-3 shadow-lg transition-all duration-300 ${
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3 pointer-events-none"
       }`}
     >
       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-      <span className="text-[13px] font-medium text-gray-800">Settings saved</span>
+      <span className="text-[13px] font-medium text-[var(--color-text)]">Settings saved</span>
     </div>
   );
 }
@@ -96,7 +96,7 @@ function ToggleRow({
       <span
         aria-hidden
         className={`relative shrink-0 rounded-full transition-colors ${
-          on ? "bg-indigo-500" : "bg-[var(--color-border-2)]"
+          on ? "bg-indigo-500" : "bg-[var(--color-border)]"
         }`}
         style={{ width: 40, height: 22 }}
       >
@@ -191,8 +191,8 @@ function VoiceCard({
       aria-pressed={selected}
       className={`relative flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
         selected
-          ? "border-indigo-500 bg-indigo-50"
-          : "border-[var(--color-border)] bg-[var(--color-surface-2)] hover:border-indigo-300"
+          ? "border-indigo-500 bg-indigo-500/10"
+          : "border-[var(--color-border)] bg-[var(--color-surface-2)] hover:border-indigo-400/60"
       }`}
     >
       {/* selected checkmark */}
@@ -206,7 +206,7 @@ function VoiceCard({
         <p className="text-[13.5px] font-medium text-[var(--color-text)] leading-none mb-1">
           {voice.name}
           {isDefault && (
-            <span className="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 leading-none">
+            <span className="ml-2 inline-flex items-center rounded-full bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-400 leading-none">
               Current
             </span>
           )}
@@ -223,10 +223,10 @@ function VoiceCard({
         title={previewError ?? undefined}
         className={`shrink-0 w-8 h-8 rounded-full border flex items-center justify-center transition-colors disabled:opacity-50 ${
           previewError
-            ? "bg-amber-50 border-amber-300 hover:bg-amber-100"
+            ? "bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/15"
             : playing
-            ? "bg-indigo-100 border-indigo-400"
-            : "bg-[var(--color-surface)] border-[var(--color-border)] hover:bg-indigo-50 hover:border-indigo-300"
+            ? "bg-indigo-500/10 border-indigo-400"
+            : "bg-[var(--color-surface)] border-[var(--color-border)] hover:bg-indigo-500/5 hover:border-indigo-400/60"
         }`}
       >
         {loading ? (
@@ -313,8 +313,8 @@ export default function SettingsPage() {
                   key={p}
                   className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                     active
-                      ? "border-indigo-400 bg-indigo-50"
-                      : "border-[var(--color-border)] bg-[var(--color-surface-2)] hover:border-indigo-300"
+                      ? "border-indigo-400 bg-indigo-500/10"
+                      : "border-[var(--color-border)] bg-[var(--color-surface-2)] hover:border-indigo-400/60"
                   }`}
                 >
                   <input

@@ -2,6 +2,34 @@ import re
 from datetime import datetime
 from .esco_loader import get_degree_keywords
 
+DEGREE_LEVELS: dict[str, int] = {
+    "high school": 0, "secondary": 0, "diploma": 1, "associate": 2,
+    "bachelor": 3, "b.s": 3, "b.a": 3, "b.e": 3, "b.tech": 3, "undergraduate": 3,
+    "master": 4, "m.s": 4, "m.a": 4, "m.e": 4, "m.tech": 4, "mba": 4, "postgraduate": 4,
+    "phd": 5, "ph.d": 5, "doctorate": 5, "doctoral": 5,
+}
+
+
+def _extract_degree_level(text: str) -> int | None:
+    lower = text.lower()
+    highest: int | None = None
+    for keyword, level in DEGREE_LEVELS.items():
+        if keyword in lower:
+            if highest is None or level > highest:
+                highest = level
+    return highest
+
+
+def _extract_required_degree_level(jd_text: str) -> tuple[int | None, bool]:
+    lower = jd_text.lower()
+    preferred_only = bool(re.search(
+        r'(?:preferred|nice.to.have|plus|bonus)\b.{0,40}(?:degree|bachelor|master|phd)',
+        lower, re.DOTALL,
+    ))
+    level = _extract_degree_level(jd_text)
+    return level, preferred_only
+
+
 DATE_PATTERNS = [
     (
         r'(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
@@ -82,22 +110,30 @@ def parse_experience(jd_text: str, resume_text: str) -> dict:
     degree_keywords = get_degree_keywords()
     resume_lower = resume_text.lower()
     degree_found = any(d.lower() in resume_lower for d in degree_keywords)
-    jd_needs_degree = bool(
-        re.search(
-            r"bachelor|master|degree required|bs\s*/\s*ms|b\.s\.|m\.s\.|undergraduate",
-            jd_text,
-            re.IGNORECASE,
-        )
-    )
 
-    edu_score = (100 if degree_found else 35) if jd_needs_degree else (80 if degree_found else 65)
+    resume_degree_level = _extract_degree_level(resume_text)
+    required_degree_level, preferred_only = _extract_required_degree_level(jd_text)
+
+    if required_degree_level is None:
+        education_score = 100
+    elif resume_degree_level is None:
+        education_score = 30
+    elif resume_degree_level >= required_degree_level:
+        education_score = 100
+    elif resume_degree_level == required_degree_level - 1:
+        education_score = 70 if not preferred_only else 85
+    else:
+        education_score = 45 if preferred_only else 30
 
     return {
         "experience_score": exp_score,
-        "education_score": edu_score,
+        "education_score": education_score,
         "total_years": total_years,
         "weighted_years": round(weighted_years, 1),
         "required_years": required_years,
         "degree_found": degree_found,
+        "resume_degree_level": resume_degree_level,
+        "required_degree_level": required_degree_level,
+        "degree_preferred_only": preferred_only,
         "date_ranges": merged,
     }
