@@ -105,10 +105,28 @@ async def _gemini_feedback(prompt: str) -> dict[str, Any]:
 
 
 async def _ollama_feedback(prompt: str) -> dict[str, Any]:
+    # Simpler prompt for Ollama — smaller models struggle with long complex prompts
+    score = 0
+    try:
+        import re as _re
+        m = _re.search(r'Overall Score: (\d+)', prompt)
+        score = int(m.group(1)) if m else 0
+        req_m = _re.search(r'Required Keywords Missing: (.+)', prompt)
+        req_missing = req_m.group(1).strip() if req_m else "None"
+    except Exception:
+        req_missing = "None"
+
+    simple_prompt = (
+        f"Output JSON only. No markdown. First character must be {{.\n\n"
+        f"Resume ATS score: {score}/100. Required keywords missing: {req_missing}.\n\n"
+        f'Return exactly: {{"strengths": ["strength 1", "strength 2"], '
+        f'"weaknesses": ["weakness 1"], '
+        f'"suggestions": ["action 1", "action 2", "action 3"]}}'
+    )
     raw = await ollama_chat(
-        [{"role": "user", "content": prompt}],
+        [{"role": "user", "content": simple_prompt}],
         tools=None,
-        temperature=0.3,
+        temperature=0.2,
     )
     content = raw.get("message", {}).get("content", "")
     if not content:
@@ -131,7 +149,9 @@ async def generate_ats_feedback(data: dict[str, Any]) -> dict[str, Any]:
         log.warning("ats_feedback.gemini_failed", error=str(e))
 
     try:
-        return await _ollama_feedback(prompt)
+        result = await _ollama_feedback(prompt)
+        log.info("ats_feedback.ollama_ok")
+        return result
     except Exception as e:
         log.warning("ats_feedback.ollama_failed", error=str(e))
 

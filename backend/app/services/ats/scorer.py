@@ -161,7 +161,7 @@ async def analyze_resume(resume_text: str, jd_text: str) -> dict:
     )
 
     # Hard penalty: >50% of required keywords missing tanks the score
-    required_total = jd_parsed.get("required_count", 1) or 1
+    required_total = total_required or 1  # already computed above from keywords["required"]
     required_missing_count = len(req_missing_list)
     required_miss_ratio = required_missing_count / required_total
     if required_miss_ratio > 0.5:

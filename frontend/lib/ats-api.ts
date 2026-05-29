@@ -31,14 +31,21 @@ export async function getAtsFeedback(result: AnalysisResult): Promise<ATSFeedbac
     ats_risks: result.sections.ats_risks,
     suggestions: result.suggestions,
   };
-  const res = await fetch(`${BASE}/ats/ai-feedback`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`AI feedback error ${res.status}`);
-  return res.json() as Promise<ATSFeedback>;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000); // 45s max
+  try {
+    const res = await fetch(`${BASE}/ats/ai-feedback`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`AI feedback error ${res.status}`);
+    return res.json() as Promise<ATSFeedback>;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export interface TailorRequest {
