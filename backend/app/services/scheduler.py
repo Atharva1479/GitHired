@@ -15,6 +15,64 @@ log = logging.getLogger("scheduler")
 _scheduler: BackgroundScheduler | None = None
 
 
+# ── Daily job alerts ──────────────────────────────────────────────────────────
+
+def _job_alerts_sync() -> None:
+    try:
+        asyncio.run(_job_alerts_async())
+    except Exception as exc:
+        log.exception("scheduler.job_alerts_failed: %s", exc)
+
+
+async def _job_alerts_async() -> None:
+    from app.repositories.jobs import list_active_searches_all_users, update_search_alerted
+    from app.services.email_service import send_job_alert_email
+    from app.services.job_search import search_jobs
+
+    async with pool().acquire() as conn:
+        searches = await list_active_searches_all_users(conn)
+        if not searches:
+            log.info("scheduler.job_alerts.no_active_searches")
+            return
+
+        by_user: dict[int, list] = {}
+        for s in searches:
+            by_user.setdefault(s["user_id"], []).append(s)
+
+        for user_id, user_searches in by_user.items():
+            new_jobs_for_user: list[dict] = []
+
+            for search in user_searches:
+                jobs = await search_jobs(
+                    conn=conn,
+                    query=search["query"],
+                    location=search["location"],
+                    remote_only=search["remote_only"],
+                    experience=search["experience"],
+                    freshness_hours=search["freshness_hours"],
+                    user_id=user_id,
+                )
+                fresh = [j for j in jobs if j.get("bookmark_status") is None]
+                new_jobs_for_user.extend(fresh[:5])
+                await update_search_alerted(conn, search["id"])
+
+            if new_jobs_for_user:
+                user_row = await conn.fetchrow(
+                    "SELECT email, display_name FROM users WHERE id = $1", user_id
+                )
+                if user_row and user_row["email"]:
+                    await send_job_alert_email(
+                        to_email=user_row["email"],
+                        user_name=user_row["display_name"] or "there",
+                        jobs=new_jobs_for_user[:15],
+                    )
+                    log.info(
+                        "scheduler.job_alerts.sent",
+                        user_id=user_id,
+                        count=len(new_jobs_for_user),
+                    )
+
+
 def start_scheduler() -> None:
     global _scheduler
     if _scheduler is not None:
@@ -48,6 +106,14 @@ def start_scheduler() -> None:
         _auto_ghost_sync,
         CronTrigger(hour=1, minute=0),
         id="auto_ghost",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
+    )
+    _scheduler.add_job(
+        _job_alerts_sync,
+        CronTrigger(hour=settings.job_alert_cron_hour, minute=0),
+        id="daily_job_alerts",
         max_instances=1,
         coalesce=True,
         misfire_grace_time=3600,
