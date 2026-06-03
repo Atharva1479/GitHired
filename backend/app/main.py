@@ -26,6 +26,7 @@ from app.routers import analytics as analytics_router
 from app.routers import settings as settings_router
 from app.routers import ats as ats_router
 from app.routers import interview as interview_router
+from app.routers import jobs as jobs_router
 from app.services import metrics
 from app.services.observability import (
     RequestContextMiddleware,
@@ -164,6 +165,7 @@ app.include_router(
 app.include_router(ats_router.router, prefix="/api/ats", tags=["ATS"])
 app.include_router(interview_router.router, prefix="/api/interview", tags=["Interview"])
 app.include_router(resumes_router.router, prefix="/api", tags=["Resumes"])
+app.include_router(jobs_router.router, prefix="/api/jobs", tags=["jobs"])
 
 
 @app.get("/healthz", tags=["Health"])
