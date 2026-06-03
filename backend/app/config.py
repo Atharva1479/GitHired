@@ -89,5 +89,19 @@ class Settings(BaseSettings):
     resend_from_email: str = "JobPilot <digest@jobpilot.app>"
     digest_enabled: bool = False   # flip to True once RESEND_API_KEY is set
 
+    # ── Job Discovery ─────────────────────────────────────────────────────────
+    # JSearch on RapidAPI: https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
+    jsearch_api_key: str | None = None
+
+    # Adzuna free job API: https://developer.adzuna.com/
+    adzuna_app_id: str | None = None
+    adzuna_api_key: str | None = None
+
+    # Cache TTL: how long (hours) to keep job results in the DB before re-fetching
+    job_cache_ttl_hours: int = 4
+
+    # UTC hour for the daily job-alert email (default 8 = 8 AM UTC = 1:30 PM IST)
+    job_alert_cron_hour: int = 8
+
 
 settings = Settings()
