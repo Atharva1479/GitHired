@@ -456,3 +456,78 @@ class SkillGapResult(BaseModel):
     role_tag: str
     matched_jobs: int
     gaps: list[SkillGap]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Job Discovery
+# ──────────────────────────────────────────────────────────────────────────────
+
+class JobSearchCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    query: str = Field(min_length=1, max_length=200)
+    location: str | None = Field(default=None, max_length=120)
+    remote_only: bool = False
+    experience: str | None = None     # 'entry' | 'mid' | 'senior'
+    freshness_hours: int = Field(default=24, ge=1, le=168)
+
+
+class JobSearchOut(BaseModel):
+    id: int
+    name: str
+    query: str
+    location: str | None
+    remote_only: bool
+    experience: str | None
+    freshness_hours: int
+    is_active: bool
+    last_alerted_at: datetime | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobResult(BaseModel):
+    """A single discovered job, enriched with freshness/competition data."""
+    id: int
+    source: str
+    external_id: str
+    title: str
+    company: str
+    location: str | None
+    description: str | None
+    apply_url: str
+    posted_at: datetime | None
+    employment_type: str | None
+    skills: list[str]
+    hours_old: float | None
+    freshness_score: int
+    freshness_label: str
+    freshness_color: str
+    est_applicants: str
+    bookmark_status: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobSearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=200)
+    location: str | None = None
+    remote_only: bool = False
+    experience: str | None = None
+    freshness_hours: int = Field(default=24, ge=1, le=168)
+    page: int = Field(default=1, ge=1, le=10)
+
+
+class ApplyAndTrackRequest(BaseModel):
+    job_cache_id: int
+    title: str
+    company: str
+    apply_url: str
+    posted_at: datetime | None = None
+    source: str
+    external_id: str
+
+
+class ApplyAndTrackOut(BaseModel):
+    bookmark_id: int
+    application_id: int
