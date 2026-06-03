@@ -184,12 +184,14 @@ async def search_jobs(
     results.sort(key=lambda x: x["freshness_score"], reverse=True)
 
     cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=freshness_hours)
-    results = [
-        r for r in results
-        if r["posted_at"] is None
-        or (r["posted_at"].tzinfo is None)
-        or r["posted_at"] >= cutoff
-    ]
+    def _within_cutoff(posted_at: datetime | None) -> bool:
+        if posted_at is None:
+            return True
+        if posted_at.tzinfo is None:
+            posted_at = posted_at.replace(tzinfo=timezone.utc)
+        return posted_at >= cutoff
+
+    results = [r for r in results if _within_cutoff(r["posted_at"])]
 
     log.info(
         "job_search.completed",
