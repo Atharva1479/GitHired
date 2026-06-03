@@ -49,7 +49,7 @@ async def send_job_alert_email(
       <p style="color:#6b7280;">These are recent postings — apply fast for the best shortlisting chances.</p>
       {job_html}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
-      <p style="font-size:12px;color:#9ca3af;">GitHired · <a href="http://localhost:3000/jobs">View all jobs</a></p>
+      <p style="font-size:12px;color:#9ca3af;">GitHired · <a href="{settings.frontend_url}/jobs">View all jobs</a></p>
     </div>
     """
 
