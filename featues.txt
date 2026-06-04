@@ -1,0 +1,16 @@
+  ---
+  Tier 3 — Engagement & retention
+
+   - Job Alert System — User sets target role/location/salary, system notifies when matching jobs appear on LinkedIn/Indeed
+  - Goals & Streaks — Set weekly goal (e.g., 10 applications/week), track streak. Your gamification system is perfect for
+  this
+  - Chrome Extension — One-click save job from any job board directly into the tracker. Removes biggest friction point in
+  job tracking
+  - Network/Referral Warm-up — Given a target company, show who in your network works there and draft a referral request
+  message
+
+  ---
+  Tier 4 — Nice to have
+
+  - Company Research Cards — Auto-pull tech stack, Glassdoor rating, recent news, interview difficulty for each company you
+   apply to
