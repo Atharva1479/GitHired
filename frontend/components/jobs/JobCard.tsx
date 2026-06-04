@@ -30,6 +30,17 @@ function MatchChip({ jobId }: { jobId: number }) {
   return <span className={`text-xs font-semibold ${cls}`}>{s}% match</span>;
 }
 
+function KeywordGap({ jobId }: { jobId: number }) {
+  const { data } = useMatchResume(jobId);
+  if (!data || !data.top_missing || data.top_missing.length === 0) return null;
+  return (
+    <p className="text-xs text-[var(--color-text-3)]">
+      <span className="text-red-500 font-medium">Missing: </span>
+      {data.top_missing.join(", ")}
+    </p>
+  );
+}
+
 function CompetitionBar({ score }: { score: number }) {
   const color =
     score >= 75 ? "bg-emerald-500" :
@@ -117,9 +128,21 @@ export default function JobCard({ job, onApply, onBookmark, onPreview }: JobCard
       {/* Competition bar */}
       <CompetitionBar score={job.freshness_score} />
 
-      <p className="text-xs text-[var(--color-text-3)]">
-        Est. applicants: <span className={`font-semibold ${colors.text}`}>{job.est_applicants}</span>
-      </p>
+      <div className="flex items-center gap-3 flex-wrap">
+        <p className="text-xs text-[var(--color-text-3)]">
+          Est. <span className={`font-semibold ${colors.text}`}>{job.est_applicants}</span> applicants
+        </p>
+        {job.velocity_label && (
+          <span className={`text-xs font-medium ${
+            job.velocity_label.startsWith("✓") ? "text-emerald-600" :
+            job.velocity_label.startsWith("↑↑") ? "text-red-500" : "text-amber-600"
+          }`}>
+            {job.velocity_label}
+          </span>
+        )}
+      </div>
+
+      <KeywordGap jobId={job.id} />
 
       {/* Skills */}
       {job.skills.length > 0 && (

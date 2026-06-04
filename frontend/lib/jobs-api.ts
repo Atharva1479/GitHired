@@ -51,11 +51,16 @@ export async function deleteSavedSearch(id: number): Promise<void> {
 export interface MatchResult {
   score: number | null;
   grade: string | null;
+  top_missing: string[];
   reason?: string;
 }
 
 export async function matchResume(jobCacheId: number): Promise<MatchResult> {
   return apiFetch(`/jobs/${jobCacheId}/match`);
+}
+
+export async function atsJobScan(jobCacheId: number): Promise<unknown> {
+  return apiFetch(`/jobs/${jobCacheId}/ats-scan`, { method: "POST" });
 }
 
 export async function bookmarkJob(jobCacheId: number): Promise<{ bookmark_id: number }> {

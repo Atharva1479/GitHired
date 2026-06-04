@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   applyAndTrack,
+  atsJobScan,
   bookmarkJob,
   createSavedSearch,
   deleteSavedSearch,
@@ -64,7 +65,11 @@ export function useMatchResume(jobCacheId: number | null) {
     queryKey: ["jobs", "match", jobCacheId],
     queryFn: () => matchResume(jobCacheId!),
     enabled: jobCacheId !== null,
-    staleTime: 1000 * 60 * 30, // cache match score 30 min
+    staleTime: 1000 * 60 * 30,
     retry: false,
   });
+}
+
+export function useAtsJobScan() {
+  return useMutation({ mutationFn: (jobCacheId: number) => atsJobScan(jobCacheId) });
 }

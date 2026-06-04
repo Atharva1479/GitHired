@@ -1,8 +1,9 @@
 "use client";
 import { useEffect } from "react";
-import { Clock, ExternalLink, MapPin, X, Zap } from "lucide-react";
+import { Clock, ExternalLink, MapPin, ScanSearch, X, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-import { useMatchResume } from "@/hooks/useJobs";
+import { useAtsJobScan, useMatchResume } from "@/hooks/useJobs";
 import type { JobResult } from "@/types/jobs";
 
 interface JobPreviewPanelProps {
@@ -13,7 +14,6 @@ interface JobPreviewPanelProps {
 
 function MatchBadge({ jobId }: { jobId: number }) {
   const { data, isLoading } = useMatchResume(jobId);
-
   if (isLoading) {
     return (
       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--color-border)] text-[var(--color-text-3)] animate-pulse">
@@ -22,17 +22,30 @@ function MatchBadge({ jobId }: { jobId: number }) {
     );
   }
   if (!data || data.score === null) return null;
-
   const score = data.score;
   const color =
     score >= 75 ? "bg-emerald-500/10 text-emerald-600 ring-emerald-500/20" :
     score >= 55 ? "bg-amber-500/10 text-amber-600 ring-amber-500/20" :
     "bg-red-500/10 text-red-600 ring-red-500/20";
-
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ring-1 ${color}`}>
       {score}% resume match
     </span>
+  );
+}
+
+function KeywordGapRow({ jobId }: { jobId: number }) {
+  const { data } = useMatchResume(jobId);
+  if (!data || !data.top_missing || data.top_missing.length === 0) return null;
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-red-500 font-medium shrink-0">Missing:</span>
+      {data.top_missing.map((k) => (
+        <span key={k} className="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-600 ring-1 ring-red-500/20">
+          {k}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -45,7 +58,21 @@ function timeAgo(posted_at: string | null): string {
 }
 
 export default function JobPreviewPanel({ job, onClose, onApply }: JobPreviewPanelProps) {
+  const router = useRouter();
+  const { mutateAsync: runAtsScan, isPending: scanning } = useAtsJobScan();
   const applied = job.bookmark_status === "applied";
+
+  async function handleAtsScan() {
+    try {
+      const result = await runAtsScan(job.id);
+      localStorage.setItem("ats_result", JSON.stringify(result));
+      localStorage.setItem("ats_jd_text", job.description ?? "");
+      onClose();
+      router.push("/ats/results");
+    } catch {
+      // error shown by toast if wired; fail silently here
+    }
+  }
 
   // Close on Escape
   useEffect(() => {
@@ -97,15 +124,26 @@ export default function JobPreviewPanel({ job, onClose, onApply }: JobPreviewPan
           </button>
         </div>
 
-        {/* Resume match + competition */}
-        <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--color-border)] flex-wrap">
-          <MatchBadge jobId={job.id} />
-          <span className="text-xs text-[var(--color-text-3)]">
-            Est. <span className="font-semibold text-[var(--color-text-2)]">{job.est_applicants}</span> applicants
-          </span>
+        {/* Resume match + competition + keyword gap */}
+        <div className="flex flex-col gap-2 px-6 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-3 flex-wrap">
+            <MatchBadge jobId={job.id} />
+            <span className="text-xs text-[var(--color-text-3)]">
+              Est. <span className="font-semibold text-[var(--color-text-2)]">{job.est_applicants}</span> applicants
+            </span>
+            {job.velocity_label && (
+              <span className={`text-xs font-medium ${
+                job.velocity_label.startsWith("✓") ? "text-emerald-600" :
+                job.velocity_label.startsWith("↑↑") ? "text-red-500" : "text-amber-600"
+              }`}>
+                {job.velocity_label}
+              </span>
+            )}
+          </div>
+          <KeywordGapRow jobId={job.id} />
           {job.skills.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {job.skills.slice(0, 5).map((s) => (
+              {job.skills.slice(0, 6).map((s) => (
                 <span key={s} className="px-2 py-0.5 rounded text-xs bg-[var(--color-border)] text-[var(--color-text-2)]">
                   {s}
                 </span>
@@ -136,7 +174,18 @@ export default function JobPreviewPanel({ job, onClose, onApply }: JobPreviewPan
         </div>
 
         {/* Footer CTAs */}
-        <div className="px-6 py-4 border-t border-[var(--color-border)] flex gap-3">
+        <div className="px-6 py-4 border-t border-[var(--color-border)] flex flex-col gap-2">
+          {/* ATS scan button — always visible */}
+          <button
+            onClick={handleAtsScan}
+            disabled={scanning}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-[var(--color-border)] text-sm font-medium hover:border-indigo-400 hover:text-indigo-500 disabled:opacity-50 transition-colors"
+          >
+            <ScanSearch className="w-4 h-4" />
+            {scanning ? "Running ATS scan…" : "Scan with my resume"}
+          </button>
+
+          <div className="flex gap-3">
           {applied ? (
             <>
               <span className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-sm text-indigo-500 font-medium">
@@ -172,6 +221,7 @@ export default function JobPreviewPanel({ job, onClose, onApply }: JobPreviewPan
               </a>
             </>
           )}
+          </div>
         </div>
       </div>
     </>

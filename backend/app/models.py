@@ -504,6 +504,7 @@ class JobResult(BaseModel):
     freshness_label: str
     freshness_color: str
     est_applicants: str
+    velocity_label: str | None = None
     bookmark_status: str | None
 
     model_config = ConfigDict(from_attributes=True)

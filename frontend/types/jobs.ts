@@ -17,6 +17,7 @@ export interface JobResult {
   freshness_label: string;
   freshness_color: FreshnessColor;
   est_applicants: string;
+  velocity_label: string | null;
   bookmark_status: "bookmarked" | "applied" | "dismissed" | null;
 }
 

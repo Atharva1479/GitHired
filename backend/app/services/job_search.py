@@ -55,6 +55,39 @@ def _freshness(posted_at: datetime | None) -> dict[str, Any]:
     }
 
 
+def _velocity_label(hours_old: float | None, first_seen_at: datetime | None) -> str | None:
+    """Estimate how competition has grown since we first discovered this job.
+
+    Only meaningful when the job has been in our cache for 3+ hours.
+    """
+    if hours_old is None or first_seen_at is None:
+        return None
+    if first_seen_at.tzinfo is None:
+        first_seen_at = first_seen_at.replace(tzinfo=timezone.utc)
+    cache_age_h = (datetime.now(tz=timezone.utc) - first_seen_at).total_seconds() / 3600
+    if cache_age_h < 3:
+        return None  # Too fresh to measure meaningful change
+
+    # Approx applicants when first seen vs now using the same tiers
+    def _est(h: float) -> float:
+        if h < 6:   return 20
+        if h < 24:  return 90
+        if h < 48:  return 275
+        if h < 72:  return 550
+        return 850
+
+    hours_old_at_first_seen = max(0.0, hours_old - cache_age_h)
+    then_est = _est(hours_old_at_first_seen)
+    now_est  = _est(hours_old)
+    gain     = now_est - then_est
+
+    if gain < 20:
+        return "✓ Still early"
+    if gain < 100:
+        return "↑ Rising"
+    return "↑↑ Getting competitive"
+
+
 def _cache_key(source: str, external_id: str) -> str:
     return f"{source}:{external_id}"
 
@@ -79,8 +112,8 @@ async def _upsert_jobs(
             INSERT INTO job_cache
               (source, external_id, title, company, location, description,
                apply_url, posted_at, employment_type, skills, raw_data,
-               fetched_at, expires_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13)
+               fetched_at, expires_at, first_seen_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14)
             ON CONFLICT (source, external_id) DO UPDATE SET
               title          = EXCLUDED.title,
               company        = EXCLUDED.company,
@@ -93,12 +126,13 @@ async def _upsert_jobs(
               raw_data       = EXCLUDED.raw_data,
               fetched_at     = EXCLUDED.fetched_at,
               expires_at     = EXCLUDED.expires_at
+              -- first_seen_at intentionally NOT updated (preserves first discovery time)
             RETURNING *
             """,
             j["source"], j["external_id"], j["title"], j["company"],
             j.get("location"), j.get("description"), j["apply_url"],
             j.get("posted_at"), j.get("employment_type"),
-            skills_arr, raw_json, now, expires_at,
+            skills_arr, raw_json, now, expires_at, now,
         )
         if row:
             rows.append(row)
@@ -178,6 +212,7 @@ async def search_jobs(
             "employment_type": row["employment_type"],
             "skills": list(row["skills"] or []),
             **f,
+            "velocity_label": _velocity_label(f["hours_old"], row.get("first_seen_at")),
             "bookmark_status": bookmark_map.get(bm_key),
         })
 

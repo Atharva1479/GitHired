@@ -171,6 +171,22 @@ async def apply_and_track(
     return ApplyAndTrackOut(bookmark_id=bm["id"], application_id=application_id)
 
 
+async def _get_resume_and_job(
+    conn: asyncpg.Connection,
+    user_id: int,
+    job_cache_id: int,
+) -> tuple[str | None, str | None]:
+    """Return (resume_text, jd_text) or (None, None) on missing data."""
+    resume_text = await conn.fetchval(
+        "SELECT parsed_text FROM resumes WHERE user_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1",
+        user_id,
+    )
+    jd_text = await conn.fetchval(
+        "SELECT description FROM job_cache WHERE id=$1", job_cache_id
+    )
+    return resume_text, jd_text
+
+
 @router.get("/{job_cache_id}/match")
 async def match_resume(
     job_cache_id: int,
@@ -179,39 +195,49 @@ async def match_resume(
 ) -> JSONResponse:
     """Score user's latest resume against a cached job description.
 
-    Returns { score, grade } or { score: null } if no resume uploaded.
+    Returns { score, grade, top_missing } or { score: null } if no resume/JD.
     """
-    # Get user's latest resume text
-    resumes = await resumes_repo.list_resumes(conn, user_id)
-    if not resumes:
-        return JSONResponse({"score": None, "grade": None, "reason": "no_resume"})
-
-    resume_text = resumes[0].parsed_text if hasattr(resumes[0], "parsed_text") else None
+    resume_text, jd_text = await _get_resume_and_job(conn, user_id, job_cache_id)
     if not resume_text:
-        # fallback: fetch raw text
-        resume_text = await conn.fetchval(
-            "SELECT parsed_text FROM resumes WHERE user_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1",
-            user_id,
-        )
-    if not resume_text:
-        return JSONResponse({"score": None, "grade": None, "reason": "no_resume"})
-
-    # Get job description from cache
-    job_row = await conn.fetchrow(
-        "SELECT description, title, company FROM job_cache WHERE id = $1", job_cache_id
-    )
-    if not job_row or not job_row["description"]:
-        return JSONResponse({"score": None, "grade": None, "reason": "no_jd"})
+        return JSONResponse({"score": None, "grade": None, "top_missing": [], "reason": "no_resume"})
+    if not jd_text:
+        return JSONResponse({"score": None, "grade": None, "top_missing": [], "reason": "no_jd"})
 
     try:
-        result = await analyze_resume(resume_text, job_row["description"])
+        result = await analyze_resume(resume_text, jd_text)
+        top_missing = (result.get("required_missing") or [])[:4]
         return JSONResponse({
             "score": result["overall_score"],
             "grade": result.get("grade", ""),
+            "top_missing": top_missing,
         })
     except Exception as exc:
         log.warning("jobs.match_failed", job_cache_id=job_cache_id, error=str(exc))
-        return JSONResponse({"score": None, "grade": None, "reason": "error"})
+        return JSONResponse({"score": None, "grade": None, "top_missing": [], "reason": "error"})
+
+
+@router.post("/{job_cache_id}/ats-scan")
+async def ats_scan(
+    job_cache_id: int,
+    conn: asyncpg.Connection = Depends(get_db),
+    user_id: int = Depends(get_user_id),
+) -> JSONResponse:
+    """Run full ATS analysis using the user's latest resume vs this job's JD.
+
+    Frontend stores the result in localStorage and navigates to /ats/results.
+    """
+    resume_text, jd_text = await _get_resume_and_job(conn, user_id, job_cache_id)
+    if not resume_text:
+        raise HTTPException(422, "No resume uploaded. Upload a resume first in the Skills Analyser.")
+    if not jd_text:
+        raise HTTPException(422, "This job has no description available for scanning.")
+
+    try:
+        result = await analyze_resume(resume_text, jd_text)
+        return JSONResponse(result)
+    except Exception as exc:
+        log.error("jobs.ats_scan_failed", job_cache_id=job_cache_id, error=str(exc))
+        raise HTTPException(500, "ATS scan failed. Please try again.")
 
 
 def _source_from_apply_url(url: str) -> str:
