@@ -1,19 +1,46 @@
 "use client";
-import { ExternalLink, X, Zap } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, ChevronRight, ExternalLink, X, Zap } from "lucide-react";
 
 import { useToast } from "@/app/providers";
-import { useApplyAndTrack } from "@/hooks/useJobs";
+import { useApplyAndTrack, useSimilarJobs } from "@/hooks/useJobs";
 import type { JobResult } from "@/types/jobs";
 
 interface ApplyModalProps {
   job: JobResult;
   onClose: () => void;
   onSuccess: (applicationId: number) => void;
+  onViewJob?: (job: JobResult) => void;  // open a similar job in preview
 }
 
-export default function ApplyModal({ job, onClose, onSuccess }: ApplyModalProps) {
+function SimilarJobRow({ job, onView }: { job: JobResult; onView: () => void }) {
+  const color =
+    job.freshness_color === "emerald" ? "text-emerald-600" :
+    job.freshness_color === "green"   ? "text-green-600" :
+    job.freshness_color === "amber"   ? "text-amber-600" : "text-red-500";
+
+  return (
+    <button
+      onClick={onView}
+      className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-[var(--color-border)] hover:border-indigo-400/60 hover:bg-[var(--color-surface)] transition-colors text-left"
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-[var(--color-text)] truncate">{job.title}</p>
+        <p className="text-xs text-[var(--color-text-3)]">{job.company} · <span className={color}>{job.freshness_label}</span></p>
+      </div>
+      <ChevronRight className="w-4 h-4 text-[var(--color-text-3)] shrink-0" />
+    </button>
+  );
+}
+
+export default function ApplyModal({ job, onClose, onSuccess, onViewJob }: ApplyModalProps) {
   const { mutateAsync, isPending } = useApplyAndTrack();
   const toast = useToast();
+  const [applied, setApplied] = useState(false);
+  const [appliedId, setAppliedId] = useState<number | null>(null);
+
+  // Fetch similar jobs only after success
+  const { data: similarJobs } = useSimilarJobs(applied ? job.id : null);
 
   async function handleApply() {
     window.open(job.apply_url, "_blank", "noopener,noreferrer");
@@ -28,9 +55,9 @@ export default function ApplyModal({ job, onClose, onSuccess }: ApplyModalProps)
         external_id: job.external_id,
         description: job.description,
       });
-      toast.push("success", `${job.company} added to your tracker`);
+      setApplied(true);
+      setAppliedId(res.application_id);
       onSuccess(res.application_id);
-      onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
       if (msg.startsWith("already_applied:")) {
@@ -42,6 +69,69 @@ export default function ApplyModal({ job, onClose, onSuccess }: ApplyModalProps)
     }
   }
 
+  function handleViewSimilar(similar: JobResult) {
+    onClose();
+    onViewJob?.(similar);
+  }
+
+  /* ── Success state ──────────────────────────────────────────── */
+  if (applied) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-2xl">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              <div>
+                <p className="text-sm font-bold text-emerald-600">Added to tracker!</p>
+                <p className="text-xs text-[var(--color-text-3)]">{job.title} · {job.company}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--color-border)]">
+              <X className="w-4 h-4 text-[var(--color-text-3)]" />
+            </button>
+          </div>
+
+          {/* Similar jobs */}
+          {similarJobs && similarJobs.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-[var(--color-text-3)] uppercase tracking-wide mb-2">
+                Similar fresh roles
+              </p>
+              <div className="space-y-2">
+                {similarJobs.map((s) => (
+                  <SimilarJobRow
+                    key={`${s.source}-${s.external_id}`}
+                    job={s}
+                    onView={() => handleViewSimilar(s)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 mt-2">
+            <a
+              href="/applications"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-sm font-medium hover:border-indigo-400 transition-colors"
+            >
+              View in Tracker
+            </a>
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
+            >
+              Continue Browsing
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Confirm state ──────────────────────────────────────────── */
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-2xl">

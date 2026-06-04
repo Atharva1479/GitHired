@@ -142,6 +142,7 @@ export default function JobsPage() {
           job={applyJob}
           onClose={() => setApplyJob(null)}
           onSuccess={() => setAppliedCount((c) => c + 1)}
+          onViewJob={(similar) => { setApplyJob(null); setPreviewJob(similar); }}
         />
       )}
     </AppShell>

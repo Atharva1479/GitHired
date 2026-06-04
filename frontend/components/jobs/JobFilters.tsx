@@ -24,12 +24,21 @@ const FRESHNESS_OPTIONS = [
   { value: 168, label: "Last week" },
 ];
 
+const JOB_TYPES = [
+  { value: "",         label: "All types" },
+  { value: "full",     label: "Full-time" },
+  { value: "part",     label: "Part-time" },
+  { value: "contract", label: "Contract" },
+  { value: "intern",   label: "Internship" },
+];
+
 export default function JobFilters({ onSearch, isLoading }: JobFiltersProps) {
   const [query, setQuery]         = useState("");
   const [location, setLocation]   = useState("");
   const [experience, setExp]      = useState("");
   const [freshness, setFreshness] = useState(24);
   const [remoteOnly, setRemote]   = useState(false);
+  const [jobType, setJobType]     = useState("");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,11 +49,13 @@ export default function JobFilters({ onSearch, isLoading }: JobFiltersProps) {
       experience: experience || undefined,
       freshness_hours: freshness,
       remote_only: remoteOnly,
+      employment_type: jobType || undefined,
     });
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Main search row */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-3)]" />
@@ -72,6 +83,7 @@ export default function JobFilters({ onSearch, isLoading }: JobFiltersProps) {
         </button>
       </div>
 
+      {/* Filter row 1: freshness + experience + remote */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Freshness pills */}
         <div className="flex items-center gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-1">
@@ -112,6 +124,25 @@ export default function JobFilters({ onSearch, isLoading }: JobFiltersProps) {
           </button>
           <span className="text-[var(--color-text-2)]">Remote only</span>
         </label>
+      </div>
+
+      {/* Filter row 2: job type chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-[var(--color-text-3)] font-medium">Type:</span>
+        {JOB_TYPES.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => setJobType(t.value)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              jobType === t.value
+                ? "bg-indigo-600 border-indigo-600 text-white"
+                : "border-[var(--color-border)] text-[var(--color-text-2)] hover:border-indigo-400"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
     </form>
   );

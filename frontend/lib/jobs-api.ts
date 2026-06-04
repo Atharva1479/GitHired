@@ -29,7 +29,19 @@ export async function searchJobs(params: SearchParams): Promise<JobResult[]> {
   if (params.experience) qs.set("experience", params.experience);
   if (params.freshness_hours) qs.set("freshness_hours", String(params.freshness_hours));
   if (params.page) qs.set("page", String(params.page));
-  return apiFetch(`/jobs/search?${qs.toString()}`);
+  const jobs: JobResult[] = await apiFetch(`/jobs/search?${qs.toString()}`);
+  // Client-side employment type filter (data already in results)
+  if (params.employment_type) {
+    const needle = params.employment_type.toLowerCase();
+    return jobs.filter(
+      (j) => j.employment_type && j.employment_type.toLowerCase().includes(needle),
+    );
+  }
+  return jobs;
+}
+
+export async function getSimilarJobs(jobCacheId: number): Promise<JobResult[]> {
+  return apiFetch(`/jobs/${jobCacheId}/similar`);
 }
 
 export async function listSavedSearches(): Promise<JobSearch[]> {

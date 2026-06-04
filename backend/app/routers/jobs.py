@@ -20,6 +20,7 @@ from app.repositories import jobs as repo
 from app.repositories import resumes as resumes_repo
 from app.services import job_search
 from app.services.ats.scorer import analyze_resume
+from app.services.job_search import get_similar_jobs
 
 log = structlog.get_logger("jobs_router")
 router = APIRouter()
@@ -169,6 +170,18 @@ async def apply_and_track(
 
     log.info("jobs.apply_and_track", user_id=user_id, company=body.company, application_id=application_id)
     return ApplyAndTrackOut(bookmark_id=bm["id"], application_id=application_id)
+
+
+@router.get("/{job_cache_id}/similar", response_model=list[JobResult])
+async def similar_jobs(
+    job_cache_id: int,
+    limit: int = Query(default=3, ge=1, le=10),
+    conn: asyncpg.Connection = Depends(get_db),
+    user_id: int = Depends(get_user_id),
+) -> list[JobResult]:
+    """Return similar fresh jobs from cache based on the applied job's title."""
+    results = await get_similar_jobs(conn, job_cache_id, user_id, limit)
+    return [JobResult(**r) for r in results]
 
 
 async def _get_resume_and_job(

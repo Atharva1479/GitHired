@@ -49,6 +49,7 @@ export interface SearchParams {
   remote_only?: boolean;
   experience?: string;
   freshness_hours?: number;
+  employment_type?: string;  // "full-time" | "part-time" | "contract" | "internship"
   page?: number;
 }
 

@@ -7,6 +7,7 @@ import {
   bookmarkJob,
   createSavedSearch,
   deleteSavedSearch,
+  getSimilarJobs,
   listSavedSearches,
   matchResume,
   searchJobs,
@@ -72,4 +73,14 @@ export function useMatchResume(jobCacheId: number | null) {
 
 export function useAtsJobScan() {
   return useMutation({ mutationFn: (jobCacheId: number) => atsJobScan(jobCacheId) });
+}
+
+export function useSimilarJobs(jobCacheId: number | null) {
+  return useQuery({
+    queryKey: ["jobs", "similar", jobCacheId],
+    queryFn: () => getSimilarJobs(jobCacheId!),
+    enabled: jobCacheId !== null,
+    staleTime: 1000 * 60 * 15,
+    retry: false,
+  });
 }

@@ -234,3 +234,61 @@ async def search_jobs(
         jsearch=len(jsearch_results), adzuna=len(adzuna_results),
     )
     return results
+
+
+async def get_similar_jobs(
+    conn: asyncpg.Connection,
+    job_cache_id: int,
+    user_id: int | None = None,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    """Find similar fresh jobs from the cache using full-text title matching."""
+    source_row = await conn.fetchrow(
+        "SELECT title, skills FROM job_cache WHERE id = $1", job_cache_id
+    )
+    if not source_row:
+        return []
+
+    rows = await conn.fetch(
+        """
+        SELECT * FROM job_cache
+        WHERE id != $1
+          AND expires_at > now()
+          AND to_tsvector('english', title) @@ plainto_tsquery('english', $2)
+        ORDER BY posted_at DESC NULLS LAST
+        LIMIT $3
+        """,
+        job_cache_id, source_row["title"], limit,
+    )
+
+    bookmark_map: dict[str, str] = {}
+    if user_id is not None:
+        bm_rows = await conn.fetch(
+            "SELECT source, external_id, status FROM job_bookmarks WHERE user_id = $1",
+            user_id,
+        )
+        for bm in bm_rows:
+            bookmark_map[f"{bm['source']}:{bm['external_id']}"] = bm["status"]
+
+    results: list[dict[str, Any]] = []
+    for row in rows:
+        f = _freshness(row["posted_at"])
+        bm_key = f"{row['source']}:{row['external_id']}"
+        results.append({
+            "id": row["id"],
+            "source": row["source"],
+            "external_id": row["external_id"],
+            "title": row["title"],
+            "company": row["company"],
+            "location": row["location"],
+            "description": row["description"],
+            "apply_url": row["apply_url"],
+            "posted_at": row["posted_at"],
+            "employment_type": row["employment_type"],
+            "skills": list(row["skills"] or []),
+            **f,
+            "velocity_label": _velocity_label(f["hours_old"], row.get("first_seen_at")),
+            "bookmark_status": bookmark_map.get(bm_key),
+        })
+
+    return results
