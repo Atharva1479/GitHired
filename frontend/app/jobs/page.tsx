@@ -1,0 +1,133 @@
+"use client";
+import { useState } from "react";
+import { Briefcase, TrendingUp, Zap } from "lucide-react";
+
+import AppShell from "@/components/layout/AppShell";
+import ApplyModal from "@/components/jobs/ApplyModal";
+import JobCard from "@/components/jobs/JobCard";
+import JobFilters from "@/components/jobs/JobFilters";
+import SavedSearchPanel from "@/components/jobs/SavedSearchPanel";
+import { useBookmarkJob, useJobSearch } from "@/hooks/useJobs";
+import type { JobResult, SearchParams } from "@/types/jobs";
+
+export default function JobsPage() {
+  const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
+  const [selectedJob, setSelectedJob]   = useState<JobResult | null>(null);
+  const [appliedCount, setAppliedCount] = useState(0);
+
+  const { data: jobs, isLoading, error } = useJobSearch(searchParams);
+  const { mutate: bookmarkJob } = useBookmarkJob();
+
+  return (
+    <AppShell>
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        {/* Hero */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+              <Zap className="w-5 h-5 text-indigo-500" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-[var(--color-text)]">Fresh Job Finder</h1>
+              <p className="text-sm text-[var(--color-text-3)]">
+                Apply within 6–24 h of posting — before 100 applicants pile up
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3 flex-wrap">
+            {[
+              { dot: "bg-emerald-500", label: "🔥 < 6h · ~5–30 applicants" },
+              { dot: "bg-green-500",   label: "⚡ 6–24h · ~30–150 applicants" },
+              { dot: "bg-red-500",     label: "🔴 72h+ · 700+ applicants" },
+            ].map((b) => (
+              <div key={b.label} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-xs">
+                <span className={`w-2 h-2 rounded-full ${b.dot}`} />
+                <span className="text-[var(--color-text-2)]">{b.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 mb-4">
+          <JobFilters onSearch={setSearchParams} isLoading={isLoading} />
+        </div>
+
+        {/* Saved searches */}
+        <div className="mb-6">
+          <SavedSearchPanel currentParams={searchParams} onLoad={setSearchParams} />
+        </div>
+
+        {/* States */}
+        {!searchParams && (
+          <div className="text-center py-20">
+            <Briefcase className="w-10 h-10 mx-auto mb-3 text-[var(--color-text-3)]" />
+            <p className="font-medium text-[var(--color-text-2)]">Search for a role to discover fresh jobs</p>
+            <p className="text-sm text-[var(--color-text-3)] mt-1">
+              Try "Java Backend Engineer", "Python FastAPI", "Agentic AI Developer"
+            </p>
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 animate-pulse">
+                <div className="h-3 w-24 bg-[var(--color-border)] rounded mb-3" />
+                <div className="h-4 w-full bg-[var(--color-border)] rounded mb-2" />
+                <div className="h-3 w-32 bg-[var(--color-border)] rounded" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-xl bg-red-500/10 ring-1 ring-red-500/20 px-4 py-3 text-sm text-red-600">
+            {(error as Error).message}
+          </div>
+        )}
+
+        {jobs && jobs.length === 0 && searchParams && !isLoading && (
+          <div className="text-center py-16">
+            <TrendingUp className="w-8 h-8 mx-auto mb-3 text-[var(--color-text-3)]" />
+            <p className="font-medium text-[var(--color-text-2)]">No fresh jobs found</p>
+            <p className="text-sm text-[var(--color-text-3)] mt-1">
+              Try a broader keyword, different location, or extend the freshness window
+            </p>
+          </div>
+        )}
+
+        {jobs && jobs.length > 0 && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-[var(--color-text-3)]">
+                <span className="font-semibold text-[var(--color-text)]">{jobs.length}</span> fresh jobs · sorted by lowest competition
+              </p>
+              {appliedCount > 0 && (
+                <span className="text-xs text-emerald-600 font-medium">✓ {appliedCount} applied this session</span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {jobs.map((job) => (
+                <JobCard
+                  key={`${job.source}-${job.external_id}`}
+                  job={job}
+                  onApply={setSelectedJob}
+                  onBookmark={(j) => bookmarkJob(j.id)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {selectedJob && (
+        <ApplyModal
+          job={selectedJob}
+          onClose={() => setSelectedJob(null)}
+          onSuccess={(id) => { setAppliedCount((c) => c + 1); }}
+        />
+      )}
+    </AppShell>
+  );
+}
