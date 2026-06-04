@@ -6,17 +6,24 @@ import { AppShell } from "@/components/layout/AppShell";
 import ApplyModal from "@/components/jobs/ApplyModal";
 import JobCard from "@/components/jobs/JobCard";
 import JobFilters from "@/components/jobs/JobFilters";
+import JobPreviewPanel from "@/components/jobs/JobPreviewPanel";
 import SavedSearchPanel from "@/components/jobs/SavedSearchPanel";
 import { useBookmarkJob, useJobSearch } from "@/hooks/useJobs";
 import type { JobResult, SearchParams } from "@/types/jobs";
 
 export default function JobsPage() {
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
-  const [selectedJob, setSelectedJob]   = useState<JobResult | null>(null);
+  const [applyJob, setApplyJob]         = useState<JobResult | null>(null);
+  const [previewJob, setPreviewJob]     = useState<JobResult | null>(null);
   const [appliedCount, setAppliedCount] = useState(0);
 
   const { data: jobs, isLoading, error } = useJobSearch(searchParams);
   const { mutate: bookmarkJob } = useBookmarkJob();
+
+  function handleApply(job: JobResult) {
+    setPreviewJob(null);
+    setApplyJob(job);
+  }
 
   return (
     <AppShell>
@@ -112,7 +119,8 @@ export default function JobsPage() {
                 <JobCard
                   key={`${job.source}-${job.external_id}`}
                   job={job}
-                  onApply={setSelectedJob}
+                  onApply={handleApply}
+                  onPreview={setPreviewJob}
                   onBookmark={(j) => bookmarkJob(j.id)}
                 />
               ))}
@@ -121,11 +129,19 @@ export default function JobsPage() {
         )}
       </div>
 
-      {selectedJob && (
+      {previewJob && (
+        <JobPreviewPanel
+          job={previewJob}
+          onClose={() => setPreviewJob(null)}
+          onApply={handleApply}
+        />
+      )}
+
+      {applyJob && (
         <ApplyModal
-          job={selectedJob}
-          onClose={() => setSelectedJob(null)}
-          onSuccess={(id) => { setAppliedCount((c) => c + 1); }}
+          job={applyJob}
+          onClose={() => setApplyJob(null)}
+          onSuccess={() => setAppliedCount((c) => c + 1)}
         />
       )}
     </AppShell>

@@ -17,7 +17,9 @@ from app.models import (
     JobSearchOut,
 )
 from app.repositories import jobs as repo
+from app.repositories import resumes as resumes_repo
 from app.services import job_search
+from app.services.ats.scorer import analyze_resume
 
 log = structlog.get_logger("jobs_router")
 router = APIRouter()
@@ -167,6 +169,49 @@ async def apply_and_track(
 
     log.info("jobs.apply_and_track", user_id=user_id, company=body.company, application_id=application_id)
     return ApplyAndTrackOut(bookmark_id=bm["id"], application_id=application_id)
+
+
+@router.get("/{job_cache_id}/match")
+async def match_resume(
+    job_cache_id: int,
+    conn: asyncpg.Connection = Depends(get_db),
+    user_id: int = Depends(get_user_id),
+) -> JSONResponse:
+    """Score user's latest resume against a cached job description.
+
+    Returns { score, grade } or { score: null } if no resume uploaded.
+    """
+    # Get user's latest resume text
+    resumes = await resumes_repo.list_resumes(conn, user_id)
+    if not resumes:
+        return JSONResponse({"score": None, "grade": None, "reason": "no_resume"})
+
+    resume_text = resumes[0].parsed_text if hasattr(resumes[0], "parsed_text") else None
+    if not resume_text:
+        # fallback: fetch raw text
+        resume_text = await conn.fetchval(
+            "SELECT parsed_text FROM resumes WHERE user_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1",
+            user_id,
+        )
+    if not resume_text:
+        return JSONResponse({"score": None, "grade": None, "reason": "no_resume"})
+
+    # Get job description from cache
+    job_row = await conn.fetchrow(
+        "SELECT description, title, company FROM job_cache WHERE id = $1", job_cache_id
+    )
+    if not job_row or not job_row["description"]:
+        return JSONResponse({"score": None, "grade": None, "reason": "no_jd"})
+
+    try:
+        result = await analyze_resume(resume_text, job_row["description"])
+        return JSONResponse({
+            "score": result["overall_score"],
+            "grade": result.get("grade", ""),
+        })
+    except Exception as exc:
+        log.warning("jobs.match_failed", job_cache_id=job_cache_id, error=str(exc))
+        return JSONResponse({"score": None, "grade": None, "reason": "error"})
 
 
 def _source_from_apply_url(url: str) -> str:

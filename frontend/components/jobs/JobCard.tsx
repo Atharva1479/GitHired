@@ -2,12 +2,14 @@
 import { useState } from "react";
 import { Bookmark, BookmarkCheck, Clock, ExternalLink, MapPin } from "lucide-react";
 
+import { useMatchResume } from "@/hooks/useJobs";
 import type { FreshnessColor, JobResult } from "@/types/jobs";
 
 interface JobCardProps {
   job: JobResult;
   onApply: (job: JobResult) => void;
   onBookmark: (job: JobResult) => void;
+  onPreview: (job: JobResult) => void;
 }
 
 const COLOR_MAP: Record<FreshnessColor, { bg: string; text: string; ring: string }> = {
@@ -18,6 +20,15 @@ const COLOR_MAP: Record<FreshnessColor, { bg: string; text: string; ring: string
   red:     { bg: "bg-red-500/10",     text: "text-red-600",     ring: "ring-red-500/20" },
   zinc:    { bg: "bg-zinc-500/10",    text: "text-zinc-500",    ring: "ring-zinc-500/20" },
 };
+
+function MatchChip({ jobId }: { jobId: number }) {
+  const { data, isLoading } = useMatchResume(jobId);
+  if (isLoading) return <span className="text-xs text-[var(--color-text-3)] animate-pulse">Scanning…</span>;
+  if (!data || data.score === null) return null;
+  const s = data.score;
+  const cls = s >= 75 ? "text-emerald-600" : s >= 55 ? "text-amber-600" : "text-red-500";
+  return <span className={`text-xs font-semibold ${cls}`}>{s}% match</span>;
+}
 
 function CompetitionBar({ score }: { score: number }) {
   const color =
@@ -44,7 +55,7 @@ function timeAgo(posted_at: string | null): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-export default function JobCard({ job, onApply, onBookmark }: JobCardProps) {
+export default function JobCard({ job, onApply, onBookmark, onPreview }: JobCardProps) {
   const [bookmarked, setBookmarked] = useState(
     job.bookmark_status === "bookmarked" || job.bookmark_status === "applied",
   );
@@ -58,7 +69,10 @@ export default function JobCard({ job, onApply, onBookmark }: JobCardProps) {
   }
 
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 flex flex-col gap-3 hover:border-indigo-400/60 transition-colors">
+    <div
+      onClick={() => onPreview(job)}
+      className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 flex flex-col gap-3 hover:border-indigo-400/60 transition-colors cursor-pointer"
+    >
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -71,6 +85,7 @@ export default function JobCard({ job, onApply, onBookmark }: JobCardProps) {
                 ✓ Applied
               </span>
             )}
+            <MatchChip jobId={job.id} />
           </div>
           <h3 className="font-semibold text-[var(--color-text)] text-sm leading-snug line-clamp-2">{job.title}</h3>
           <p className="text-sm text-[var(--color-text-2)] mt-0.5">{job.company}</p>
@@ -121,7 +136,7 @@ export default function JobCard({ job, onApply, onBookmark }: JobCardProps) {
       )}
 
       {/* CTA */}
-      <div className="flex gap-2 pt-1">
+      <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
         {applied ? (
           <a
             href={job.apply_url}
@@ -134,7 +149,7 @@ export default function JobCard({ job, onApply, onBookmark }: JobCardProps) {
         ) : (
           <>
             <button
-              onClick={() => onApply(job)}
+              onClick={(e) => { e.stopPropagation(); onApply(job); }}
               className="flex-1 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
             >
               Apply & Track
@@ -145,6 +160,7 @@ export default function JobCard({ job, onApply, onBookmark }: JobCardProps) {
               rel="noopener noreferrer"
               className="px-3 py-2 rounded-lg border border-[var(--color-border)] hover:border-indigo-400 transition-colors"
               title="Open posting"
+              onClick={(e) => e.stopPropagation()}
             >
               <ExternalLink className="w-4 h-4 text-[var(--color-text-3)]" />
             </a>

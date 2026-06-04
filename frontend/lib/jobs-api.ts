@@ -48,6 +48,16 @@ export async function deleteSavedSearch(id: number): Promise<void> {
   return apiFetch(`/jobs/searches/${id}`, { method: "DELETE" });
 }
 
+export interface MatchResult {
+  score: number | null;
+  grade: string | null;
+  reason?: string;
+}
+
+export async function matchResume(jobCacheId: number): Promise<MatchResult> {
+  return apiFetch(`/jobs/${jobCacheId}/match`);
+}
+
 export async function bookmarkJob(jobCacheId: number): Promise<{ bookmark_id: number }> {
   return apiFetch(`/jobs/bookmark/${jobCacheId}`, { method: "POST" });
 }

@@ -7,6 +7,7 @@ import {
   createSavedSearch,
   deleteSavedSearch,
   listSavedSearches,
+  matchResume,
   searchJobs,
 } from "@/lib/jobs-api";
 import type { JobSearchCreate, SearchParams } from "@/types/jobs";
@@ -56,4 +57,14 @@ export function useBookmarkJob() {
 
 export function useApplyAndTrack() {
   return useMutation({ mutationFn: applyAndTrack });
+}
+
+export function useMatchResume(jobCacheId: number | null) {
+  return useQuery({
+    queryKey: ["jobs", "match", jobCacheId],
+    queryFn: () => matchResume(jobCacheId!),
+    enabled: jobCacheId !== null,
+    staleTime: 1000 * 60 * 30, // cache match score 30 min
+    retry: false,
+  });
 }
