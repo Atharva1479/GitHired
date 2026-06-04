@@ -526,6 +526,7 @@ class ApplyAndTrackRequest(BaseModel):
     posted_at: datetime | None = None
     source: str
     external_id: str
+    description: str | None = None
 
 
 class ApplyAndTrackOut(BaseModel):

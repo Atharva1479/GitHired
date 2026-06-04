@@ -60,6 +60,7 @@ export async function applyAndTrack(payload: {
   posted_at: string | null;
   source: string;
   external_id: string;
+  description?: string | null;
 }): Promise<ApplyAndTrackResponse> {
   return apiFetch("/jobs/apply", {
     method: "POST",

@@ -120,13 +120,27 @@ async def apply_and_track(
     conn: asyncpg.Connection = Depends(get_db),
     user_id: int = Depends(get_user_id),
 ) -> ApplyAndTrackOut:
-    """Create a bookmark + application entry in one transaction."""
+    """Create a bookmark + application entry in one transaction.
+
+    Returns 409 if the user has already applied to this job.
+    """
+    # Duplicate guard — check if user already applied to this exact job
+    existing = await conn.fetchrow(
+        "SELECT id, application_id FROM job_bookmarks WHERE user_id=$1 AND source=$2 AND external_id=$3 AND status='applied'",
+        user_id, body.source, body.external_id,
+    )
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"already_applied:{existing['application_id']}",
+        )
+
     async with conn.transaction():
         app_row = await conn.fetchrow(
             """
             INSERT INTO applications
-              (user_id, company, role, source, status, applied_date, jd_url)
-            VALUES ($1, $2, $3, $4, 'Applied', CURRENT_DATE, $5)
+              (user_id, company, role, source, status, applied_date, jd_url, jd_text)
+            VALUES ($1, $2, $3, $4, 'Applied', CURRENT_DATE, $5, $6)
             RETURNING id
             """,
             user_id,
@@ -134,6 +148,7 @@ async def apply_and_track(
             body.title,
             _source_from_apply_url(body.apply_url),
             body.apply_url,
+            body.description,
         )
         application_id: int = app_row["id"]
 

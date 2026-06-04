@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Briefcase, TrendingUp, Zap } from "lucide-react";
 
-import AppShell from "@/components/layout/AppShell";
+import { AppShell } from "@/components/layout/AppShell";
 import ApplyModal from "@/components/jobs/ApplyModal";
 import JobCard from "@/components/jobs/JobCard";
 import JobFilters from "@/components/jobs/JobFilters";

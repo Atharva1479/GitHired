@@ -1,6 +1,7 @@
 "use client";
 import { ExternalLink, X, Zap } from "lucide-react";
 
+import { useToast } from "@/app/providers";
 import { useApplyAndTrack } from "@/hooks/useJobs";
 import type { JobResult } from "@/types/jobs";
 
@@ -12,20 +13,33 @@ interface ApplyModalProps {
 
 export default function ApplyModal({ job, onClose, onSuccess }: ApplyModalProps) {
   const { mutateAsync, isPending } = useApplyAndTrack();
+  const toast = useToast();
 
   async function handleApply() {
     window.open(job.apply_url, "_blank", "noopener,noreferrer");
-    const res = await mutateAsync({
-      job_cache_id: job.id,
-      title: job.title,
-      company: job.company,
-      apply_url: job.apply_url,
-      posted_at: job.posted_at,
-      source: job.source,
-      external_id: job.external_id,
-    });
-    onSuccess(res.application_id);
-    onClose();
+    try {
+      const res = await mutateAsync({
+        job_cache_id: job.id,
+        title: job.title,
+        company: job.company,
+        apply_url: job.apply_url,
+        posted_at: job.posted_at,
+        source: job.source,
+        external_id: job.external_id,
+        description: job.description,
+      });
+      toast.push("success", `${job.company} added to your tracker`);
+      onSuccess(res.application_id);
+      onClose();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.startsWith("already_applied:")) {
+        toast.push("error", "You've already applied to this job");
+        onClose();
+      } else {
+        toast.push("error", "Failed to track application. Please try again.");
+      }
+    }
   }
 
   return (
@@ -48,7 +62,7 @@ export default function ApplyModal({ job, onClose, onSuccess }: ApplyModalProps)
         <div className="rounded-xl bg-indigo-500/5 ring-1 ring-indigo-500/20 p-4 mb-5 space-y-1.5 text-sm">
           <p className="text-[var(--color-text-2)]">✓ Job posting opens in a new tab</p>
           <p className="text-[var(--color-text-2)]">✓ Application entry created automatically in your tracker</p>
-          <p className="text-[var(--color-text-2)]">✓ Status set to <strong>Applied</strong> with today's date</p>
+          <p className="text-[var(--color-text-2)]">✓ Job description saved · Status set to <strong>Applied</strong></p>
         </div>
 
         <div className="rounded-xl px-4 py-3 mb-5 text-sm font-medium bg-emerald-500/10 text-emerald-600">
