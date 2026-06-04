@@ -14,6 +14,7 @@ import {
   Trophy,
   Volume2,
   VolumeX,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -106,6 +107,13 @@ export function TopBar() {
             className="px-3 py-1.5 rounded-md hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
           >
             Applications
+          </Link>
+          <Link
+            href="/jobs"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
+          >
+            <Zap className="w-4 h-4" />
+            Jobs
           </Link>
           <Link
             href="/referrals"
