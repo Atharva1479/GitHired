@@ -22,7 +22,9 @@ _PRESENT_TENSE_VERBS = {
 
 _METRIC_RE = re.compile(
     r'\b\d+(?:\.\d+)?\s*(?:%|x|×|k|m|billion|million|thousand)\b'
-    r'|\$\s*\d+|\b\d{4,}\b',
+    r'|\$\s*\d+|\b\d{4,}\b'
+    r'|\b\d{1,3}(?:,\d{3})+\b'     # comma-formatted: 10,000 / 5,000
+    r'|\b\d+\+(?!\d)',              # explicit lower-bound counts: 10+, 15+ (no trailing \b — + is non-word)
     re.IGNORECASE,
 )
 

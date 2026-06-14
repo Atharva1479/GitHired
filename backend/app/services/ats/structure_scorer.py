@@ -11,7 +11,7 @@ _WORD_RE = re.compile(r'\b\w+\b')
 
 def _estimate_pages(text: str) -> float:
     words = len(_WORD_RE.findall(text))
-    return words / 450
+    return words / 350
 
 
 def _detect_sections(text: str) -> list[str]:

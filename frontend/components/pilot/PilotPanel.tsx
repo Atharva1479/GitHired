@@ -81,16 +81,16 @@ export function PilotPanel({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Pilot — voice assistant"
+      aria-label="Jarvis — voice assistant"
       className="fixed bottom-6 right-6 z-50 w-[calc(100vw-3rem)] max-w-[360px] h-[min(520px,calc(100vh-6rem))] rounded-2xl bg-[var(--color-surface)] shadow-2xl ring-1 ring-[var(--color-border)] flex flex-col overflow-hidden fade-up"
     >
       <header className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-fuchsia-500/10">
         <div className="flex items-center gap-2 min-w-0">
           <span className="grid place-items-center w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white text-[12px] font-bold">
-            P
+            J
           </span>
           <div className="min-w-0">
-            <div className="text-[14px] font-semibold text-[var(--color-text)]">Pilot</div>
+            <div className="text-[14px] font-semibold text-[var(--color-text)]">Jarvis</div>
             <div className="text-[11px] text-[var(--color-text-3)]">
               <StatusLabel status={agent.status} />
             </div>
@@ -112,7 +112,7 @@ export function PilotPanel({
             type="button"
             onClick={() => agent.setVoiceEnabled(!agent.voiceEnabled)}
             className="p-1.5 rounded-md text-[var(--color-text-3)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-2)] transition-colors"
-            aria-label={agent.voiceEnabled ? "Mute Pilot" : "Unmute Pilot"}
+            aria-label={agent.voiceEnabled ? "Mute Jarvis" : "Unmute Jarvis"}
             title={agent.voiceEnabled ? "Mute voice" : "Enable voice"}
           >
             {agent.voiceEnabled ? (
@@ -285,7 +285,7 @@ function ToolTraceFooter({ trace }: { trace: PilotToolTrace[] }) {
         >
           <Wrench className="w-3 h-3" />
           <span>
-            Pilot checked {trace.length}{" "}
+            Jarvis checked {trace.length}{" "}
             {trace.length === 1 ? "source" : "sources"}
           </span>
           <ChevronDown

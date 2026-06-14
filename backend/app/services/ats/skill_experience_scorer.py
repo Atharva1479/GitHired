@@ -1,18 +1,18 @@
 """Detect years-per-skill claims and match against JD experience requirements."""
 from __future__ import annotations
-import re
+import re as _re
 
-_SKILL_YRS_RE = re.compile(
+_SKILL_YRS_RE = _re.compile(
     r'(\d+)\+?\s*(?:to\s*\d+\+?)?\s*years?\s*(?:of\s*)?(?:experience\s*(?:with|in|using)?\s*)?([A-Za-z][A-Za-z+#.\s]{1,25})',
-    re.IGNORECASE,
+    _re.IGNORECASE,
 )
-_ALT_RE = re.compile(
+_ALT_RE = _re.compile(
     r'([A-Za-z][A-Za-z+#.\s]{1,25})\s*(?:for|over|across)\s*(\d+)\+?\s*years?',
-    re.IGNORECASE,
+    _re.IGNORECASE,
 )
-_JD_REQ_RE = re.compile(
+_JD_REQ_RE = _re.compile(
     r'(\d+)\+?\s*years?\s*(?:of\s*)?(?:experience\s*(?:with|in|using)?\s*)?([A-Za-z][A-Za-z+#.\s]{1,25})',
-    re.IGNORECASE,
+    _re.IGNORECASE,
 )
 
 _STOP = {"experience","work","development","engineering","software","technology","industry","field"}
@@ -22,7 +22,15 @@ def _clean(skill: str) -> str:
     return skill.strip().lower().rstrip("s, ")
 
 
-def _extract_skill_years(text: str, pattern: re.Pattern) -> dict[str, int]:
+def _skills_match(a: str, b: str) -> bool:
+    """Word-boundary safe match — prevents 'java' matching inside 'javascript'."""
+    return bool(
+        _re.search(r'\b' + _re.escape(a) + r'\b', b) or
+        _re.search(r'\b' + _re.escape(b) + r'\b', a)
+    )
+
+
+def _extract_skill_years(text: str, pattern: _re.Pattern) -> dict[str, int]:
     result: dict[str, int] = {}
     for m in pattern.finditer(text):
         yrs_str, skill_str = m.group(1), m.group(2)
@@ -63,7 +71,7 @@ def score_skill_experience(resume_text: str, jd_text: str) -> dict:
     for skill, required_yrs in jd_requirements.items():
         resume_yrs = 0
         for r_skill, r_yrs in resume_skill_yrs.items():
-            if skill in r_skill or r_skill in skill:
+            if _skills_match(skill, r_skill):
                 resume_yrs = max(resume_yrs, r_yrs)
         if resume_yrs >= required_yrs:
             met.append({"skill": skill, "required": required_yrs, "found": resume_yrs})

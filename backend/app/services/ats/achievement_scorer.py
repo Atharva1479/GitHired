@@ -25,20 +25,19 @@ _QUANT_RE = re.compile(
     r'\b\d+(?:\.\d+)?\s*(?:%|percent|x|×|k|m|billion|million|thousand)\b'
     r'|\$\s*\d+(?:\.\d+)?[kmb]?\b'
     r'|\b\d+(?:\.\d+)?[x×]\b'
-    r'|\b\d{4,}\b',
+    r'|\b\d{4,}\b'
+    r'|\b\d{1,3}(?:,\d{3})+\b'     # comma-formatted: 10,000 / 5,000
+    r'|\b\d+\+(?!\d)',              # explicit lower-bound counts: 10+, 15+ (no trailing \b — + is non-word)
     re.IGNORECASE,
 )
 
 _BULLET_RE = re.compile(r'(?:^|\n)\s*[•\-–—*▸○◦]\s*(.+)', re.MULTILINE)
-_SENT_RE   = re.compile(r'(?<=[.!\n])\s*([A-Z][^.!\n]{15,})', re.MULTILINE)
 
 
 def score_achievements(resume_text: str) -> dict:
     """Return achievement_score (0-100) + diagnostics."""
-    bullets   = _BULLET_RE.findall(resume_text)
-    sentences = _SENT_RE.findall(resume_text)
-    items     = bullets + sentences
-    total     = max(len(items), 1)
+    items = _BULLET_RE.findall(resume_text)
+    total = max(len(items), 1)
 
     quant_count = sum(1 for item in items if _QUANT_RE.search(item))
     quant_rate  = quant_count / total

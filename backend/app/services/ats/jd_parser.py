@@ -9,17 +9,20 @@ REQUIRED_MARKERS = [
 PREFERRED_MARKERS = [
     "preferred", "nice to have", "nice-to-have", "bonus", "plus",
     "desired", "ideal", "additional", "advantageous", "not required but",
-    "would be great", "good to have",
+    "would be great", "good to have", "good-to-have", "great to have",
+    "great-to-have", "added advantage", "is a plus", "will be a plus",
 ]
 RESPONSIBILITIES_MARKERS = [
     "responsibilities", "what you'll do", "what you will do", "the role",
     "your role", "day to day", "duties", "about the role", "you will",
-    "in this role", "what you do",
+    "in this role", "what you do", "key responsibilities", "your responsibilities",
+    "role overview",
 ]
 IGNORE_MARKERS = [
     "about us", "about the company", "who we are", "benefits",
     "perks", "compensation", "equal opportunity", "eeo", "diversity",
-    "our culture", "why join",
+    "our culture", "why join", "job summary", "about the job",
+    "about this role", "overview", "position summary", "role summary",
 ]
 
 
@@ -27,12 +30,14 @@ def _detect_section(line: str) -> str | None:
     clean = line.strip().lower().rstrip(":").strip()
     if len(clean) > 80 or not clean:
         return None
-    for m in REQUIRED_MARKERS:
-        if m in clean:
-            return "required"
+    # Preferred checked before required: "good-to-have qualifications" contains both
+    # "good-to-have" (preferred) and "qualifications" (required) — preferred wins.
     for m in PREFERRED_MARKERS:
         if m in clean:
             return "preferred"
+    for m in REQUIRED_MARKERS:
+        if m in clean:
+            return "required"
     for m in RESPONSIBILITIES_MARKERS:
         if m in clean:
             return "context"

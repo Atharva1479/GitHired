@@ -33,13 +33,10 @@ export type AnalysisResult = {
   grade: string;
   categories: {
     keyword_match: CategoryScore;
-    required_coverage: CategoryScore;
-    semantic_sentence: CategoryScore;
-    word_semantic: CategoryScore;
-    ontology_match: CategoryScore;
     experience: CategoryScore;
     education: CategoryScore;
-    parsability: CategoryScore;
+    sections_present: CategoryScore;
+    resume_quality: CategoryScore;
   };
   matched_keywords: string[];
   missing_keywords: string[];

@@ -255,7 +255,7 @@ export function PilotOrb() {
         <button
           type="button"
           onClick={() => setPanelOpen(true)}
-          aria-label="Open Pilot"
+          aria-label="Open Jarvis"
           className="relative flex items-center gap-2"
         >
           {greeting && !panelOpen && !voiceMode ? (

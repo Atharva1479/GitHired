@@ -29,14 +29,14 @@ export default function PilotHistoryPage() {
           <header className="mb-6">
             <div className="flex items-center gap-2 text-[12px] uppercase tracking-[0.18em] text-[var(--color-text-3)]">
               <HistoryIcon className="w-3.5 h-3.5" />
-              <span>Pilot history</span>
+              <span>Jarvis history</span>
             </div>
             <h1 className="mt-1 text-[26px] font-bold tracking-tight text-[var(--color-text)]">
-              What Pilot did on your behalf
+              What Jarvis did on your behalf
             </h1>
             <p className="text-[14px] text-[var(--color-text-3)] mt-1">
               Every voice turn, in order. Expand any reply to see the
-              tools Pilot called, the arguments it passed, and what came
+              tools Jarvis called, the arguments it passed, and what came
               back.
             </p>
           </header>
@@ -89,7 +89,7 @@ function TurnRow({ turn }: { turn: PilotHistoryTurn }) {
             isUser ? "text-indigo-400" : "text-[var(--color-text-3)]"
           }`}
         >
-          {isUser ? "You" : "Pilot"}
+          {isUser ? "You" : "Jarvis"}
         </span>
         <span className="text-[11px] text-[var(--color-text-3)] tabular-nums">
           {date} · {time}
@@ -115,7 +115,7 @@ function TurnRow({ turn }: { turn: PilotHistoryTurn }) {
           >
             <Wrench className="w-3 h-3" />
             <span>
-              Pilot used {traceCount} tool{traceCount === 1 ? "" : "s"}
+              Jarvis used {traceCount} tool{traceCount === 1 ? "" : "s"}
             </span>
             {open ? (
               <ChevronUp className="w-3 h-3" />

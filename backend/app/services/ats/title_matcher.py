@@ -15,7 +15,7 @@ _ROLE_SUFFIX = (
     r'scientist|consultant|director|officer|specialist|administrator)'
 )
 _RESUME_TITLE_RE = re.compile(
-    r'(?m)^[ \t]*([A-Z][A-Za-z /,\-]+' + _ROLE_SUFFIX + r')\s*(?:\||at|@|,|$)',
+    r'(?m)^[ \t]*([A-Z][A-Za-z /,\-]+' + _ROLE_SUFFIX + r'(?:\s+\w+)?)\s*(?:\||at|@|,|$)',
     re.IGNORECASE,
 )
 _JD_TITLE_RE = re.compile(

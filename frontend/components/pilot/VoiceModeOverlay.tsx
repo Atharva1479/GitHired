@@ -82,7 +82,7 @@ export function VoiceModeOverlay({
     <div
       role="dialog"
       aria-modal="false"
-      aria-label="Pilot voice mode"
+      aria-label="Jarvis voice mode"
       className="group/pearl fixed bottom-6 right-6 z-[80] fade-up"
     >
       <VoicePearl
@@ -165,17 +165,17 @@ const SettingsMenu = function SettingsMenu({
       className="absolute bottom-[140px] right-0 w-[240px] rounded-2xl bg-slate-900/85 text-white ring-1 ring-white/10 backdrop-blur-xl shadow-2xl fade-up p-2"
     >
       <div className="px-2 pt-1 pb-2 text-[10.5px] uppercase tracking-[0.2em] text-white/55">
-        Pilot · voice settings
+        Jarvis · voice settings
       </div>
       <ToggleRow
         label="Continuous listening"
-        sub="Re-arm the mic after Pilot replies"
+        sub="Re-arm the mic after Jarvis replies"
         on={agent.continuousMode}
         onToggle={() => agent.setContinuousMode(!agent.continuousMode)}
       />
       <ToggleRow
         label="Interrupt on speak"
-        sub="Cut Pilot off when you start talking"
+        sub="Cut Jarvis off when you start talking"
         on={agent.bargeInEnabled}
         onToggle={() => agent.setBargeInEnabled(!agent.bargeInEnabled)}
       />

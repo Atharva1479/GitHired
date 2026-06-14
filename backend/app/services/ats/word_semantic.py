@@ -47,7 +47,7 @@ def get_vectors() -> Any:
 def word_similarity_score(jd_keywords: list[str], resume_parsed: dict) -> dict:
     wv = get_vectors()
     if wv is None:
-        return {"score": 50.0, "semantic_matches": [], "fallback": True}
+        return {"score": 65.0, "semantic_matches": [], "fallback": True}
 
     resume_full = " ".join(str(v) for v in resume_parsed.values()).lower()
     resume_words = set(re.findall(r'\b[a-z]{3,}\b', resume_full))

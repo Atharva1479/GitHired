@@ -1,13 +1,27 @@
 import re
 
-_MULTI_COL_RE = re.compile(r'[ \t]{8,}[A-Za-z]')
+_MULTI_COL_RE = re.compile(r'[ \t]{8,}([A-Za-z])')
+# "Languages:    Java, Python" — skills table label-value pair, NOT multi-column
+_SKILLS_LABEL_RE = re.compile(r'^\s*[\w][\w\s,&/]+:\s{4,}', re.IGNORECASE)
 
 
 def _detect_multi_column(text: str) -> bool:
-    lines_with_gap = sum(
-        1 for line in text.split('\n')
-        if _MULTI_COL_RE.search(line) and len(line) > 40
-    )
+    # True two-column layout: both the content before AND after the large gap are
+    # substantial (≥25 chars each). This excludes:
+    #   - "Languages:    Java, Python…" (label-value skills table)
+    #   - "IQ Innovation Hub LLP    May 2025 – Present" (company+date row, date ≤18 chars)
+    # A genuine two-column resume has two full-length text blocks side by side.
+    def _is_two_col(line: str) -> bool:
+        if _SKILLS_LABEL_RE.match(line):
+            return False
+        m = _MULTI_COL_RE.search(line)
+        if not m:
+            return False
+        before = line[:m.start()].strip()
+        after = line[m.end() - 1:].strip()   # include the letter that matched
+        return len(before) >= 15 and len(after) >= 25
+
+    lines_with_gap = sum(1 for line in text.split('\n') if len(line) > 40 and _is_two_col(line))
     return lines_with_gap > 5
 
 
@@ -49,11 +63,6 @@ def check_parsability(resume_text: str, resume_parsed: dict) -> dict:
 
     if not re.search(r'[\+\(]?[\d\s\-\(\)]{7,15}', resume_text):
         ats_risks.append("No phone number detected")
-
-    if len(re.findall(r' {3,}', resume_text)) > 10:
-        ats_risks.append(
-            "Multiple large spaces — possible table layout, ATS will misparse"
-        )
 
     if "skills" not in sections_found:
         ats_risks.append(

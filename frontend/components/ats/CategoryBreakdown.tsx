@@ -7,8 +7,6 @@ interface Props {
   categories: AnalysisResult["categories"];
 }
 
-const ML_KEYS = new Set(["semantic_sentence", "word_semantic"]);
-
 function barColor(score: number) {
   if (score >= 70) return "bg-emerald-500";
   if (score >= 50) return "bg-amber-500";
@@ -54,11 +52,6 @@ export function CategoryBreakdown({ categories }: Props) {
                 <span className="text-[13px] font-medium text-[var(--color-text)]">
                   {cat.label}
                 </span>
-                {ML_KEYS.has(key) && (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 ring-1 ring-violet-300/40">
-                    ML
-                  </span>
-                )}
                 <span className="text-[11px] text-[var(--color-text-3)] bg-[var(--color-surface-2)] px-1.5 py-0.5 rounded-md">
                   {cat.weight}%
                 </span>

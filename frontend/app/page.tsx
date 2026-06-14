@@ -170,7 +170,7 @@ function PilotChatMock() {
           <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
           <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-          <span className="ml-3 text-[11px] font-mono text-gray-400">Pilot — AI job-hunt assistant</span>
+          <span className="ml-3 text-[11px] font-mono text-gray-400">Jarvis — AI job-hunt assistant</span>
         </div>
         {/* chat messages */}
         <div className="px-4 py-4 space-y-3">
@@ -208,7 +208,7 @@ function PilotChatMock() {
         {/* input bar */}
         <div className="flex items-center gap-2 px-4 pb-4">
           <div className="flex-1 rounded-xl bg-gray-50 text-gray-400 text-[12.5px] px-3 py-2 ring-1 ring-gray-200">
-            Ask Pilot anything…
+            Ask Jarvis anything…
           </div>
         </div>
       </div>
@@ -325,7 +325,7 @@ function PillarLearn() {
               <span className="text-emerald-600">You execute it.</span>
             </h2>
             <p className="mt-4 text-[16px] text-gray-600 leading-relaxed">
-              Tell Pilot your target role and companies — it generates a
+              Tell Jarvis your target role and companies — it generates a
               structured revision tree of sections, subsections, and topics.
               Track each topic by status and let the AI fill gaps as you go.
             </p>
@@ -339,7 +339,7 @@ function PillarLearn() {
               <FeatureCard
                 icon={<Sparkles className="w-5 h-5" />}
                 tone="emerald"
-                title="AI Pilot Chat"
+                title="AI Jarvis Chat"
                 body="Ask about your prep, generate topics, or get a daily priority list — by text or voice."
               />
             </div>
@@ -392,7 +392,7 @@ function StudyMock() {
       </ul>
       <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center gap-2">
         <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-        <span className="text-[12px] text-gray-500">Ask Pilot to generate more topics…</span>
+        <span className="text-[12px] text-gray-500">Ask Jarvis to generate more topics…</span>
       </div>
     </div>
   );
@@ -607,7 +607,7 @@ function PillarMotivate() {
                 icon={<AudioLines className="w-5 h-5" />}
                 tone="violet"
                 title="Voice Agent"
-                body="Talk to Pilot hands-free. Log applications, get priorities, send follow-ups — by voice."
+                body="Talk to Jarvis hands-free. Log applications, get priorities, send follow-ups — by voice."
               />
             </div>
           </div>
@@ -1054,13 +1054,13 @@ function HowItWorks() {
     },
     {
       n: "02",
-      title: "Pilot tells you what to do today",
-      body: "Open the app or speak to Pilot — by chat or voice. It surfaces your 3–5 highest-priority actions, drafts follow-ups on demand, and updates your tracker when you're done.",
+      title: "Jarvis tells you what to do today",
+      body: "Open the app or speak to Jarvis — by chat or voice. It surfaces your 3–5 highest-priority actions, drafts follow-ups on demand, and updates your tracker when you're done.",
     },
     {
       n: "03",
       title: "Study, follow up, earn XP. Repeat.",
-      body: "Work your daily quests, build your streak, tick off study topics. Every action earns XP. Pilot keeps you consistent until an offer lands.",
+      body: "Work your daily quests, build your streak, tick off study topics. Every action earns XP. Jarvis keeps you consistent until an offer lands.",
     },
   ];
 
@@ -1194,7 +1194,7 @@ function FinalCTA() {
         <p className="mt-4 text-[16px] text-gray-600 max-w-xl mx-auto">
           Track applications, score your resume against any JD, study with AI,
           practice real interview questions by voice, earn XP for every action,
-          and let Pilot keep you on track. Sign in free and start today.
+          and let Jarvis keep you on track. Sign in free and start today.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link

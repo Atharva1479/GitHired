@@ -1,7 +1,7 @@
 "use client";
 
-import { Download, X } from "lucide-react";
-import { useEffect } from "react";
+import { Download, Loader2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 export function PdfViewer({
   open,
@@ -16,11 +16,39 @@ export function PdfViewer({
   title: string;
   onClose: () => void;
 }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const prevSrc = useRef<string | null>(null);
+
+  // Fetch PDF as blob with credentials so the auth cookie is included.
+  // This bypasses cross-origin iframe cookie restrictions.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    if (prevSrc.current === src && blobUrl) return;
+    prevSrc.current = src;
+    setBlobUrl(null);
+    setError(false);
+
+    let revoke: string | null = null;
+    fetch(src, { credentials: "include" })
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status}`);
+        return r.blob();
+      })
+      .then((blob) => {
+        revoke = URL.createObjectURL(blob);
+        setBlobUrl(revoke);
+      })
+      .catch(() => setError(true));
+
+    return () => {
+      if (revoke) URL.revokeObjectURL(revoke);
     };
+  }, [open, src]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
@@ -62,11 +90,22 @@ export function PdfViewer({
             </button>
           </div>
         </div>
-        <iframe
-          src={src}
-          title={title}
-          className="flex-1 w-full bg-[var(--color-surface-2)]"
-        />
+
+        {error ? (
+          <div className="flex-1 flex items-center justify-center text-[var(--color-text-3)] text-sm">
+            Could not load file. Try the Download button above.
+          </div>
+        ) : blobUrl ? (
+          <iframe
+            src={blobUrl}
+            title={title}
+            className="flex-1 w-full bg-[var(--color-surface-2)]"
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-[var(--color-text-3)]">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -24,7 +24,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response: Response = await call_next(request)
         h = response.headers
         h.setdefault("X-Content-Type-Options", "nosniff")
-        h.setdefault("X-Frame-Options", "SAMEORIGIN")
+        # Skip X-Frame-Options for file-serving endpoints so the PDF viewer
+        # iframe can load across origins in development (frontend :3000 → api :8000).
+        path = request.url.path
+        if not (path.endswith("/file") or "/files/" in path):
+            h.setdefault("X-Frame-Options", "SAMEORIGIN")
         h.setdefault("Referrer-Policy", "no-referrer")
         h.setdefault(
             "Permissions-Policy",

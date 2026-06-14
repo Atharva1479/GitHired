@@ -32,7 +32,7 @@ def _keyword_in_text(kw: str, text: str, alias_map: dict[str, str]) -> bool:
             return True
     # Fuzzy last resort — only on individual tokens to avoid false positives
     for word in text_lower.split():
-        if len(word) > 4 and fuzz.ratio(kw_lower, word) >= 88:
+        if len(word) > 4 and fuzz.ratio(kw_lower, word) >= 92:
             return True
     return False
 
@@ -59,7 +59,6 @@ def positional_keyword_score(
     for kw_type, kw_list in [
         ("required", keywords["required"]),
         ("preferred", keywords["preferred"]),
-        ("context", keywords["context"]),
     ]:
         type_weight = KEYWORD_TYPE_WEIGHTS[kw_type]
         for kw in kw_list:
@@ -97,7 +96,28 @@ def positional_keyword_score(
             else:
                 missing_keywords[kw] = {"type": kw_type}
 
-    score = round((earned / max_possible) * 100, 1) if max_possible > 0 else 0.0
+    score = min(round((earned / max_possible) * 100, 1), 100.0) if max_possible > 0 else 0.0
+
+    # Track context keywords for display only (no score impact).
+    # Skip any keyword already tracked as required/preferred — context overlaps heavily
+    # with requirements (JD responsibilities section repeats the same skills), and
+    # overwriting would corrupt required_matched / preferred_matched.
+    already_tracked = set(matched_keywords) | set(missing_keywords)
+    for kw in keywords.get("context", []):
+        if kw in already_tracked:
+            continue
+        best_pos = 0.0
+        best_section: str | None = None
+        for section, text in resume_parsed.items():
+            if text and _keyword_in_text(kw, str(text), alias_map):
+                pw = POSITION_WEIGHTS.get(section, 0.5)
+                if pw > best_pos:
+                    best_pos = pw
+                    best_section = section
+        if best_section:
+            matched_keywords[kw] = {"section": best_section, "type": "context"}
+        else:
+            missing_keywords[kw] = {"type": "context"}
 
     return {
         "score": score,

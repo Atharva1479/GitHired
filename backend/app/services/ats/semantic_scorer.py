@@ -28,7 +28,7 @@ def _split_sentences(text: str, max_len: int = 60) -> list[str]:
 def semantic_sentence_score(jd_parsed: dict, resume_parsed: dict) -> dict:
     model = get_model()
     if model is None:
-        return {"score": 50.0, "top_matches": [], "fallback": True}
+        return {"score": 65.0, "top_matches": [], "fallback": True}
 
     jd_text = (
         jd_parsed.get("required_text", "") + " " + jd_parsed.get("preferred_text", "")
@@ -45,7 +45,7 @@ def semantic_sentence_score(jd_parsed: dict, resume_parsed: dict) -> dict:
     resume_sents = _split_sentences(resume_text, 80)
 
     if not jd_sents or not resume_sents:
-        return {"score": 50.0, "top_matches": [], "fallback": True}
+        return {"score": 65.0, "top_matches": [], "fallback": True}
 
     try:
         from sentence_transformers import util
@@ -73,8 +73,8 @@ def semantic_sentence_score(jd_parsed: dict, resume_parsed: dict) -> dict:
                 )
         top_matches.sort(key=lambda x: x["similarity"], reverse=True)
 
-        score = round(min((avg_sim / 0.75) * 100, 100), 1)
+        score = round(min((avg_sim / 0.65) * 100, 100), 1)
         return {"score": score, "top_matches": top_matches[:6], "fallback": False}
     except Exception as e:
         log.warning("semantic_scorer: inference error — %s", str(e))
-        return {"score": 50.0, "top_matches": [], "fallback": True}
+        return {"score": 65.0, "top_matches": [], "fallback": True}

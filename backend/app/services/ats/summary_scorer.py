@@ -45,7 +45,7 @@ def score_summary(resume_text: str, jd_text: str, required_keywords: list[str]) 
     words = len(summary.split())
     length_score = 100 if 40 <= words <= 120 else max(0, 100 - abs(words - 80) * 2)
 
-    combined = int(kw_score * 0.50 + length_score * 0.25 + (25 if has_years else 0) * 0.15 + (25 if has_metric else 0) * 0.10)
+    combined = int(kw_score * 0.50 + length_score * 0.25 + (15 if has_years else 0) + (10 if has_metric else 0))
 
     suggestions: list[str] = []
     missing_in_summary = [k for k in required_keywords[:6] if k.lower() not in summary_lower]

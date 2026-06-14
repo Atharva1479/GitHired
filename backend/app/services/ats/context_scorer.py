@@ -36,7 +36,8 @@ def _is_active_use(window: str, in_skills_section: bool) -> bool:
     if _PASSIVE_PATTERNS.search(window):
         return False
     for w in window.split():
-        if w.rstrip("s") in _ACTION_VERBS or w.rstrip("ed") in _ACTION_VERBS:
+        clean = re.sub(r'[^a-z]', '', w.lower())
+        if clean in _ACTION_VERBS or clean.rstrip("s") in _ACTION_VERBS:
             return True
     return False
 

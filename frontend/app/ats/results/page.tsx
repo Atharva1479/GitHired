@@ -3,13 +3,14 @@
 import {
   ArrowLeft, CheckCircle2, ChevronDown, ChevronUp,
   Lightbulb, Loader2, ThumbsUp, TrendingUp, Wand2, AlertTriangle,
+  RefreshCw, Upload, X, FileText,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { TailorPanel } from "@/components/ats/TailorPanel";
 import type { ATSFeedback } from "@/lib/ats-api";
-import { getAtsFeedback, tailorResume } from "@/lib/ats-api";
+import { analyzeResume, getAtsFeedback, tailorResume } from "@/lib/ats-api";
 import type { AnalysisResult, CategoryScore, TailorSuggestion } from "@/types/ats";
 
 /* ─── score accent (single colour that drives the whole page) ─── */
@@ -41,13 +42,186 @@ function catText(s: number) {
 
 /* ─── category groups ─────────────────────────────────────────── */
 const GROUPS = [
-  { n: "01", label: "Keyword Match",   keys: ["keyword_match","required_coverage","context_quality","page_density"] },
-  { n: "02", label: "Semantic & NLP",  keys: ["semantic_sentence","word_semantic","ontology_match"] },
-  { n: "03", label: "Writing Quality", keys: ["achievement","bullet_quality","summary_quality","language_quality"] },
-  { n: "04", label: "Career Profile",  keys: ["experience","education","title_match","career_health","certifications","skill_experience"] },
-  { n: "05", label: "Format & ATS",    keys: ["parsability","structure","contact_completeness","readability"] },
+  { n: "01", label: "ATS Compatibility", keys: ["keyword_match", "experience", "education", "sections_present"] },
+  { n: "02", label: "Resume Quality",    keys: ["resume_quality"] },
 ];
 
+/* ─── Re-check modal ──────────────────────────────────────────── */
+function ReCheckModal({
+  jdText,
+  onClose,
+  onSuccess,
+}: {
+  jdText: string;
+  onClose: () => void;
+  onSuccess: (result: AnalysisResult) => void;
+}) {
+  const [tab, setTab] = useState<"upload" | "paste">("upload");
+  const [file, setFile] = useState<File | null>(null);
+  const [text, setText] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = useCallback((f: File) => {
+    const ext = f.name.split(".").pop()?.toLowerCase();
+    if (ext !== "pdf" && ext !== "docx") {
+      setError("Please upload a .pdf or .docx file.");
+      return;
+    }
+    setError(null);
+    setFile(f);
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  }, [handleFile]);
+
+  async function submit() {
+    if (tab === "upload" && !file) { setError("Please upload a PDF or DOCX resume."); return; }
+    if (tab === "paste" && text.trim().length < 50) { setError("Please paste at least 50 characters of your resume."); return; }
+    setError(null);
+    setLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("job_description", jdText);
+      if (tab === "upload" && file) fd.append("file", file);
+      else fd.append("resume_text", text);
+      const result = await analyzeResume(fd);
+      onSuccess(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Analysis failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative w-full max-w-md bg-[var(--color-surface)] rounded-2xl shadow-2xl ring-1 ring-[var(--color-border)] flex flex-col fade-up">
+        {/* header */}
+        <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-[var(--color-border)]">
+          <div>
+            <p className="text-[15px] font-bold text-[var(--color-text)]">Re-check resume</p>
+            <p className="text-[12px] text-[var(--color-text-3)] mt-0.5">Same JD · upload your revised resume</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md text-[var(--color-text-3)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-2)] transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* tabs */}
+          <div className="flex gap-1 p-1 bg-[var(--color-surface-2)] rounded-lg">
+            {(["upload", "paste"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => { setTab(t); setError(null); }}
+                className={`flex-1 py-1.5 rounded-md text-[12.5px] font-medium transition-colors ${
+                  tab === t
+                    ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm"
+                    : "text-[var(--color-text-3)] hover:text-[var(--color-text)]"
+                }`}
+              >
+                {t === "upload" ? "Upload file" : "Paste text"}
+              </button>
+            ))}
+          </div>
+
+          {/* upload tab */}
+          {tab === "upload" && (
+            <div
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              onClick={() => fileRef.current?.click()}
+              className={`flex flex-col items-center justify-center gap-3 h-36 rounded-xl border-2 border-dashed cursor-pointer transition-colors ${
+                dragging
+                  ? "border-indigo-500 bg-indigo-500/5"
+                  : file
+                  ? "border-emerald-500/50 bg-emerald-500/5"
+                  : "border-[var(--color-border)] hover:border-indigo-400 hover:bg-[var(--color-surface-2)]"
+              }`}
+            >
+              {file ? (
+                <>
+                  <FileText className="w-7 h-7 text-emerald-500" />
+                  <div className="text-center">
+                    <p className="text-[13px] font-medium text-[var(--color-text)] truncate max-w-[260px]">{file.name}</p>
+                    <p className="text-[11px] text-[var(--color-text-3)] mt-0.5">Click to change</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-7 h-7 text-[var(--color-text-3)]" />
+                  <div className="text-center">
+                    <p className="text-[13px] font-medium text-[var(--color-text)]">Drop PDF / DOCX or click to browse</p>
+                    <p className="text-[11px] text-[var(--color-text-3)] mt-0.5">Max 5 MB</p>
+                  </div>
+                </>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.docx"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+              />
+            </div>
+          )}
+
+          {/* paste tab */}
+          {tab === "paste" && (
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder="Paste your updated resume text here…"
+              className="w-full h-40 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 py-3 text-[13px] text-[var(--color-text)] placeholder:text-[var(--color-text-3)] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            />
+          )}
+
+          {/* error */}
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-red-500/10 ring-1 ring-red-500/20">
+              <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+              <p className="text-[12.5px] text-red-500">{error}</p>
+            </div>
+          )}
+        </div>
+
+        {/* footer */}
+        <div className="flex items-center justify-end gap-2 px-5 pb-5">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-[13px] font-medium text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-[13px] font-semibold transition-colors"
+          >
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            {loading ? "Analyzing…" : "Re-analyze"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── main page ───────────────────────────────────────────────── */
 export default function AtsResultsPage() {
   const router = useRouter();
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -61,10 +235,12 @@ export default function AtsResultsPage() {
   const [tailorSuggestions, setTailorSuggestions] = useState<TailorSuggestion[]>([]);
   const [tailorError, setTailorError] = useState<string | null>(null);
   const [expandBreakdown, setExpandBreakdown] = useState(false);
+  const [reCheckOpen, setReCheckOpen] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("ats_result");
     if (!raw) { router.replace("/ats"); return; }
+    let cancelled = false;
     try {
       const parsed = JSON.parse(raw) as AnalysisResult;
       setResult(parsed);
@@ -72,9 +248,30 @@ export default function AtsResultsPage() {
       setHydrated(true);
       setTimeout(() => setBarsReady(true), 100);
       setFbLoading(true);
-      getAtsFeedback(parsed).then(setFeedback).catch(() => setFeedback(null)).finally(() => setFbLoading(false));
+      getAtsFeedback(parsed)
+        .then(fb => { if (!cancelled) setFeedback(fb); })
+        .catch(() => { if (!cancelled) setFeedback(null); })
+        .finally(() => { if (!cancelled) setFbLoading(false); });
     } catch { router.replace("/ats"); }
+    return () => { cancelled = true; };
   }, [router]);
+
+  function handleReCheckSuccess(newResult: AnalysisResult) {
+    localStorage.setItem("ats_result", JSON.stringify(newResult));
+    setResult(newResult);
+    setReCheckOpen(false);
+    // reset dependent state
+    setBarsReady(false);
+    setFeedback(null);
+    setTailorOpen(false);
+    setTailorSuggestions([]);
+    setTailorError(null);
+    setExpandBreakdown(false);
+    setTimeout(() => setBarsReady(true), 100);
+    // re-fetch AI feedback for new resume
+    setFbLoading(true);
+    getAtsFeedback(newResult).then(setFeedback).catch(() => setFeedback(null)).finally(() => setFbLoading(false));
+  }
 
   if (!hydrated || !result) {
     return (
@@ -112,9 +309,19 @@ export default function AtsResultsPage() {
           <button onClick={handleNew} className="flex items-center gap-1.5 text-[13px] text-[var(--color-text-3)] hover:text-[var(--color-text)] transition-colors">
             <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
-          <button onClick={handleNew} className="text-[12px] text-[var(--color-text-3)] border border-[var(--color-border)] px-3 py-1.5 rounded hover:bg-[var(--color-surface-2)] transition-colors">
-            New scan
-          </button>
+          <div className="flex items-center gap-2">
+            {jdText && (
+              <button
+                onClick={() => setReCheckOpen(true)}
+                className="flex items-center gap-1.5 text-[12px] text-[var(--color-text-3)] border border-[var(--color-border)] px-3 py-1.5 rounded hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" /> Re-check resume
+              </button>
+            )}
+            <button onClick={handleNew} className="text-[12px] text-[var(--color-text-3)] border border-[var(--color-border)] px-3 py-1.5 rounded hover:bg-[var(--color-surface-2)] transition-colors">
+              New scan
+            </button>
+          </div>
         </div>
 
         {/* ─── 01 · SCORE HERO ──────────────────────────────── */}
@@ -291,8 +498,8 @@ export default function AtsResultsPage() {
                     <span className={`text-[13px] font-bold tabular-nums w-7 text-right ${gc.cls}`}>{avg}</span>
                   </div>
 
-                  {/* Expanded sub-rows */}
-                  {expandBreakdown && (
+                  {/* Expanded sub-rows — only when group has >1 category */}
+                  {expandBreakdown && validKeys.length > 1 && (
                     <div className="border-t border-[var(--color-border)] bg-[var(--color-surface-2)]">
                       {validKeys.map((k, ki) => {
                         const cat = cats[k];
@@ -406,6 +613,16 @@ export default function AtsResultsPage() {
         </div>
 
       </div>
+
+      {/* ─── re-check modal ───────────────────────────────────── */}
+      {reCheckOpen && (
+        <ReCheckModal
+          jdText={jdText}
+          onClose={() => setReCheckOpen(false)}
+          onSuccess={handleReCheckSuccess}
+        />
+      )}
+
     </AppShell>
   );
 

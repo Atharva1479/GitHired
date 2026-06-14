@@ -168,7 +168,7 @@ export function VoicePearl({
           : status === "recording"
             ? "Stop and send"
             : status === "speaking"
-              ? "Pilot is speaking — listening resumes when finished"
+              ? "Jarvis is speaking — listening resumes when finished"
               : "Voice agent busy"
       }
       className="relative block focus:outline-none cursor-pointer transition-transform duration-200 active:scale-95 hover:scale-[1.04]"

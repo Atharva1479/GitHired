@@ -29,31 +29,21 @@ def extract_keywords(jd_parsed: dict) -> dict:
 
     required_kws = find_skills(jd_parsed["required_text"])
     preferred_kws = find_skills(jd_parsed["preferred_text"])
-    context_kws = find_skills(jd_parsed["context_text"])
 
-    # Extract repeated bigrams/trigrams from required section as extra keywords
-    extra_required: list[str] = []
-    try:
-        from nltk import bigrams, trigrams, word_tokenize
-        from nltk.corpus import stopwords
+    # Remove from preferred any keyword already in required. Without this, the
+    # positional_scorer's preferred pass overwrites those keywords' matched_keywords
+    # entry from type="required" to type="preferred", deflating found_required and
+    # therefore kw_score even when all required keywords are present in the resume.
+    required_set = set(required_kws)
+    preferred_kws = [k for k in preferred_kws if k not in required_set]
 
-        stop = set(stopwords.words("english"))
-        tokens = [
-            t.lower()
-            for t in word_tokenize(jd_parsed["required_text"])
-            if t.isalpha() and t.lower() not in stop and len(t) > 2
-        ]
-        full_lower = jd_parsed["full_text"].lower()
-        for ng in list(bigrams(tokens)) + list(trigrams(tokens)):
-            phrase = " ".join(ng)
-            if full_lower.count(phrase) >= 2 and phrase not in required_kws:
-                extra_required.append(phrase)
-    except Exception as exc:
-        log.debug("keyword_extractor: nltk n-gram pass skipped", error=str(exc))
+    # Exclude from context any skill already classified as required or preferred.
+    classified = required_set | set(preferred_kws)
+    context_kws = [k for k in find_skills(jd_parsed["context_text"]) if k not in classified]
 
-    all_kws = list(set(required_kws + preferred_kws + context_kws + extra_required))
+    all_kws = list(set(required_kws + preferred_kws + context_kws))
     return {
-        "required": list(set(required_kws + extra_required)),
+        "required": list(set(required_kws)),
         "preferred": list(set(preferred_kws)),
         "context": list(set(context_kws)),
         "all_unique": list(set(all_kws)),

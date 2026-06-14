@@ -30,27 +30,15 @@ from app.services.ats.page_density_scorer import score_page_density
 
 log = logging.getLogger("ats.scorer")
 
+# 5-category model: mirrors what real ATS filters (Workday/Taleo/Greenhouse) actually check.
+# Human-recruiter signals (bullets, readability, career gaps) are computed for feedback
+# but do not contribute to the headline score.
 CATEGORY_WEIGHTS: dict[str, float] = {
-    "keyword_match":        13.0,
-    "required_coverage":     8.0,
-    "semantic_sentence":    11.0,
-    "word_semantic":         7.0,
-    "ontology_match":        5.0,
-    "experience":            5.0,
-    "education":             4.0,
-    "parsability":           2.0,
-    "achievement":           4.0,
-    "certifications":        3.0,
-    "title_match":           3.0,
-    "context_quality":       4.0,
-    "contact_completeness":  3.0,
-    "career_health":         4.0,
-    "bullet_quality":        5.0,
-    "structure":             5.0,
-    "summary_quality":       5.0,
-    "skill_experience":      4.0,
-    "readability":           3.0,
-    "page_density":          2.0,
+    "keyword_match":    40.0,  # required (70%) + preferred (30%) coverage
+    "experience":       20.0,  # years parsed vs years required
+    "education":        15.0,  # degree level vs JD requirement
+    "sections_present": 15.0,  # key sections parseable + no hard ATS format failures
+    "resume_quality":   10.0,  # achievement density + bullet strength + summary (human signal)
 }
 assert abs(sum(CATEGORY_WEIGHTS.values()) - 100.0) < 0.1
 
@@ -123,49 +111,56 @@ async def analyze_resume(resume_text: str, jd_text: str) -> dict:
     # Get required_missing list for summary and page density scorers
     req_missing_list = pos_r["required_missing"] if isinstance(pos_r.get("required_missing"), list) else []
 
-    summary_data     = score_summary(resume_text, jd_text, req_missing_list)
+    # When all required keywords are present (req_missing_list empty), check the full
+    # required list so a well-written summary still gets credit for keyword coverage.
+    summary_kw_list = req_missing_list if req_missing_list else list(keywords["required"])
+    summary_data     = score_summary(resume_text, jd_text, summary_kw_list)
     skill_exp_data   = score_skill_experience(resume_text, jd_text)
     readability_data = score_readability(resume_text)
     page_data        = score_page_density(resume_text, req_missing_list)
 
     total_required = len(keywords["required"])
-    missing_required = len(pos_r["required_missing"])
-    required_coverage = (
-        (total_required - missing_required) / total_required * 100
-        if total_required
-        else 75.0
-    )
+    total_preferred = len(keywords["preferred"])
+    found_required = len(pos_r["required_matched"])
+    found_preferred = len(pos_r["preferred_matched"])
 
-    overall = round(
-        pos_r["score"]               * CATEGORY_WEIGHTS["keyword_match"]         / 100
-        + required_coverage          * CATEGORY_WEIGHTS["required_coverage"]      / 100
-        + sem_r["score"]             * CATEGORY_WEIGHTS["semantic_sentence"]      / 100
-        + word_r["score"]            * CATEGORY_WEIGHTS["word_semantic"]          / 100
-        + ont_r["score"]             * CATEGORY_WEIGHTS["ontology_match"]         / 100
-        + exp_r["experience_score"]  * CATEGORY_WEIGHTS["experience"]             / 100
-        + exp_r["education_score"]   * CATEGORY_WEIGHTS["education"]              / 100
-        + par_r["score"]             * CATEGORY_WEIGHTS["parsability"]            / 100
-        + achievement_data["achievement_score"] * CATEGORY_WEIGHTS["achievement"] / 100
-        + cert_data["cert_score"]    * CATEGORY_WEIGHTS["certifications"]         / 100
-        + title_data["title_score"]  * CATEGORY_WEIGHTS["title_match"]            / 100
-        + context_data["context_score"] * CATEGORY_WEIGHTS["context_quality"]     / 100
-        + contact_data["contact_score"] * CATEGORY_WEIGHTS["contact_completeness"] / 100
-        + career_data["career_score"]   * CATEGORY_WEIGHTS["career_health"]       / 100
-        + bullet_data["bullet_quality_score"] * CATEGORY_WEIGHTS["bullet_quality"] / 100
-        + struct_data["structure_score"] * CATEGORY_WEIGHTS["structure"]           / 100
-        + summary_data["summary_score"]      * CATEGORY_WEIGHTS["summary_quality"]  / 100
-        + skill_exp_data["skill_exp_score"]  * CATEGORY_WEIGHTS["skill_experience"] / 100
-        + readability_data["readability_score"] * CATEGORY_WEIGHTS["readability"]   / 100
-        + page_data["page_density_score"]    * CATEGORY_WEIGHTS["page_density"]     / 100,
+    # --- 5-category ATS score ---
+    # 1. Keyword Match (40%): required (70%) + preferred (30%) coverage
+    req_pct  = (found_required  / total_required  * 100) if total_required  else 75.0
+    pref_pct = (found_preferred / total_preferred * 100) if total_preferred else 75.0
+    kw_score = round(req_pct * 0.7 + pref_pct * 0.3, 1)
+
+    # 2. Experience (20%): years parsed vs requirement (from experience_parser)
+    exp_score_val = exp_r["experience_score"]
+
+    # 3. Education (15%): degree level match (from experience_parser)
+    edu_score_val = exp_r["education_score"]
+
+    # 4. Sections Present (15%): key sections parseable + no hard ATS format failures
+    sections_score = par_r["score"]
+
+    # 5. Resume Quality (10%): achievement density + bullet strength + summary
+    #    Human-facing signal, clearly labeled. Does not simulate ATS behavior.
+    quality_score = round(
+        achievement_data["achievement_score"] * 0.4
+        + bullet_data["bullet_quality_score"] * 0.4
+        + summary_data["summary_score"]       * 0.2,
         1,
     )
 
-    # Hard penalty: >50% of required keywords missing tanks the score
-    required_total = total_required or 1  # already computed above from keywords["required"]
-    required_missing_count = len(req_missing_list)
-    required_miss_ratio = required_missing_count / required_total
-    if required_miss_ratio > 0.5:
-        penalty = int((required_miss_ratio - 0.5) * 40)
+    overall = round(
+        kw_score       * CATEGORY_WEIGHTS["keyword_match"]    / 100
+        + exp_score_val * CATEGORY_WEIGHTS["experience"]       / 100
+        + edu_score_val * CATEGORY_WEIGHTS["education"]        / 100
+        + sections_score * CATEGORY_WEIGHTS["sections_present"] / 100
+        + quality_score  * CATEGORY_WEIGHTS["resume_quality"]   / 100,
+        1,
+    )
+
+    # Hard floor for resumes missing >50% of required keywords
+    req_miss_ratio = (total_required - found_required) / (total_required or 1)
+    if req_miss_ratio > 0.5:
+        penalty = int((req_miss_ratio - 0.5) * 40)
         overall = max(0, overall - penalty)
 
     grade = next(g for t, g in GRADE_MAP if overall >= t)
@@ -234,172 +229,48 @@ async def analyze_resume(resume_text: str, jd_text: str) -> dict:
         "grade": grade,
         "categories": {
             "keyword_match": {
-                "label": "Keyword Match (Positional)",
-                "score": pos_r["score"],
+                "label": "Keyword Match",
+                "score": kw_score,
                 "weight": int(CATEGORY_WEIGHTS["keyword_match"]),
                 "description": (
-                    "Skills(2.5×) > Certs(2×) > Experience(1.5×) — Taleo Req Rank model"
-                ),
-            },
-            "required_coverage": {
-                "label": "Required Keywords Coverage",
-                "score": required_coverage,
-                "weight": int(CATEGORY_WEIGHTS["required_coverage"]),
-                "description": (
-                    f"{total_required - missing_required} of {total_required} "
-                    f"required keywords found"
-                ),
-            },
-            "semantic_sentence": {
-                "label": "Semantic Phrase Match",
-                "score": sem_r["score"],
-                "weight": int(CATEGORY_WEIGHTS["semantic_sentence"]),
-                "description": "MiniLM — 'Led team of 8' matches 'leadership'",
-                "fallback": sem_r.get("fallback", False),
-            },
-            "word_semantic": {
-                "label": "Word Semantic Similarity",
-                "score": word_r["score"],
-                "weight": int(CATEGORY_WEIGHTS["word_semantic"]),
-                "description": (
-                    "Word2Vec — 'engineer' ≈ 'developer', 'built' ≈ 'developed'"
-                ),
-                "fallback": word_r.get("fallback", False),
-            },
-            "ontology_match": {
-                "label": "ESCO Ontology Match",
-                "score": ont_r["score"],
-                "weight": int(CATEGORY_WEIGHTS["ontology_match"]),
-                "description": (
-                    "'K8s' matches 'Kubernetes', 'Postgres' matches 'PostgreSQL'"
+                    f"{found_required} of {total_required} required · "
+                    f"{found_preferred} of {total_preferred} preferred"
                 ),
             },
             "experience": {
-                "label": "Experience (Recency-Weighted)",
-                "score": exp_r["experience_score"],
+                "label": "Experience",
+                "score": exp_score_val,
                 "weight": int(CATEGORY_WEIGHTS["experience"]),
                 "description": (
-                    f"{exp_r['total_years']} yrs raw, "
-                    f"{exp_r.get('weighted_years', exp_r['total_years'])} yrs recency-weighted"
-                    + (
-                        f" vs {exp_r['required_years']} required"
-                        if exp_r["required_years"]
-                        else ""
-                    )
+                    f"{exp_r['total_years']} yrs found"
+                    + (f" vs {exp_r['required_years']} required" if exp_r["required_years"] else "")
                 ),
             },
             "education": {
-                "label": "Education Match",
-                "score": exp_r["education_score"],
+                "label": "Education",
+                "score": edu_score_val,
                 "weight": int(CATEGORY_WEIGHTS["education"]),
-                "description": "Degree and certification requirements",
+                "description": "Degree level vs JD requirement",
             },
-            "parsability": {
+            "sections_present": {
                 "label": "ATS Parsability",
-                "score": par_r["score"],
-                "weight": int(CATEGORY_WEIGHTS["parsability"]),
-                "description": "Resume structure, sections, ATS-readable formatting",
-            },
-            "achievement": {
-                "label": "Achievements & Action Verbs",
-                "score": achievement_data["achievement_score"],
-                "weight": int(CATEGORY_WEIGHTS["achievement"]),
+                "score": sections_score,
+                "weight": int(CATEGORY_WEIGHTS["sections_present"]),
                 "description": (
-                    f"{achievement_data['quant_count']} quantified bullets, "
-                    f"{achievement_data['strong_verb_count']} strong action verbs"
+                    f"Missing: {', '.join(par_r['sections_missing'])}"
+                    if par_r["sections_missing"]
+                    else "All key sections detected"
                 ),
             },
-            "certifications": {
-                "label": "Certification Match",
-                "score": cert_data["cert_score"],
-                "weight": int(CATEGORY_WEIGHTS["certifications"]),
+            "resume_quality": {
+                "label": "Resume Quality",
+                "score": quality_score,
+                "weight": int(CATEGORY_WEIGHTS["resume_quality"]),
                 "description": (
-                    f"{len(cert_data['matched'])} of {len(cert_data['jd_certs'])} JD certs matched"
-                    if cert_data["jd_certs"] else "No certifications required by JD"
+                    f"{achievement_data['quant_count']} quantified bullets · "
+                    f"{achievement_data['strong_verb_count']} strong verbs · "
+                    f"{'summary found' if summary_data['summary_found'] else 'no summary'}"
                 ),
-            },
-            "title_match": {
-                "label": "Job Title Alignment",
-                "score": title_data["title_score"],
-                "weight": int(CATEGORY_WEIGHTS["title_match"]),
-                "description": (
-                    f"Best match: '{title_data['best_match']}' → '{title_data['jd_title']}' "
-                    f"({int((title_data['match_ratio'] or 0) * 100)}% similar)"
-                    if title_data["jd_title"] else "No target role detected in JD"
-                ),
-            },
-            "context_quality": {
-                "label": "Keyword Context Quality",
-                "score": context_data["context_score"],
-                "weight": int(CATEGORY_WEIGHTS["context_quality"]),
-                "description": (
-                    f"{context_data['active_count']} active-use keywords, "
-                    f"{context_data['passive_count']} passive mentions"
-                ),
-            },
-            "contact_completeness": {
-                "label": "Contact Completeness",
-                "score": contact_data["contact_score"],
-                "weight": int(CATEGORY_WEIGHTS["contact_completeness"]),
-                "description": (
-                    f"Missing: {', '.join(contact_data['missing_fields'])}"
-                    if contact_data["missing_fields"] else "All contact fields present"
-                ),
-            },
-            "career_health": {
-                "label": "Career Consistency",
-                "score": career_data["career_score"],
-                "weight": int(CATEGORY_WEIGHTS["career_health"]),
-                "description": (
-                    f"Max gap: {career_data['max_gap_months']}mo, "
-                    f"Avg tenure: {career_data['avg_tenure_months'] or 'N/A'}mo"
-                ),
-            },
-            "bullet_quality": {
-                "label": "Bullet Quality (STAR+Length+Tense)",
-                "score": bullet_data["bullet_quality_score"],
-                "weight": int(CATEGORY_WEIGHTS["bullet_quality"]),
-                "description": (
-                    f"{bullet_data['star_bullets']}/{bullet_data['total_bullets']} STAR bullets, "
-                    f"{bullet_data['duplicate_pairs']} duplicates, "
-                    f"{bullet_data['tense_issues']} tense issues"
-                ),
-            },
-            "structure": {
-                "label": "Resume Structure",
-                "score": struct_data["structure_score"],
-                "weight": int(CATEGORY_WEIGHTS["structure"]),
-                "description": f"~{struct_data['estimated_pages']} pages (expected {struct_data['expected_pages']:.0f})",
-            },
-            "summary_quality": {
-                "label": "Summary Section Quality",
-                "score": summary_data["summary_score"],
-                "weight": int(CATEGORY_WEIGHTS["summary_quality"]),
-                "description": (
-                    f"{len(summary_data.get('keywords_in_summary', []))} JD keywords in summary"
-                    if summary_data["summary_found"] else "No summary section detected"
-                ),
-            },
-            "skill_experience": {
-                "label": "Years-Per-Skill Match",
-                "score": skill_exp_data["skill_exp_score"],
-                "weight": int(CATEGORY_WEIGHTS["skill_experience"]),
-                "description": (
-                    f"{len(skill_exp_data['met'])} of {len(skill_exp_data['jd_requirements'])} experience requirements met"
-                    if skill_exp_data["jd_requirements"] else "No explicit experience requirements in JD"
-                ),
-            },
-            "readability": {
-                "label": "Readability & Consistency",
-                "score": readability_data["readability_score"],
-                "weight": int(CATEGORY_WEIGHTS["readability"]),
-                "description": f"Flesch score {readability_data['flesch_kincaid']}, {len(readability_data['repeated_phrases'])} repeated phrases",
-            },
-            "page_density": {
-                "label": "Page 1 Keyword Density",
-                "score": page_data["page_density_score"],
-                "weight": int(CATEGORY_WEIGHTS["page_density"]),
-                "description": f"{len(page_data['keywords_on_page1'])} required keywords on page 1",
             },
         },
         "matched_keywords": list(pos_r["matched_keywords"].keys()),
@@ -517,4 +388,5 @@ async def analyze_resume(resume_text: str, jd_text: str) -> dict:
             "known_companies_found": page_data["known_companies_found"],
             "skill_grouping_score": page_data["skill_grouping_score"],
         },
+        "resume_text": resume_text,
     }

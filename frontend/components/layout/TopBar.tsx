@@ -14,7 +14,6 @@ import {
   Trophy,
   Volume2,
   VolumeX,
-  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -29,10 +28,60 @@ import { sfx } from "@/lib/sfx";
 const PREP_ITEMS = [
   { href: "/study",     icon: BookOpenCheck, label: "Study",     desc: "Flashcards & plans" },
   { href: "/dsa",       icon: BrainCircuit,  label: "DSA",       desc: "Algorithm practice" },
-  { href: "/ats",       icon: ScanText,      label: "ATS",       desc: "Resume scanner" },
-  { href: "/resumes",   icon: FileText,      label: "Skill Gap",  desc: "Resume & gap analysis" },
   { href: "/interview", icon: Mic,           label: "Interview", desc: "AI mock interviews" },
 ];
+
+const JOBS_ITEMS = [
+  { href: "/jobs",    icon: Briefcase, label: "Jobs",      desc: "Discover opportunities" },
+  { href: "/ats",     icon: ScanText,  label: "ATS",       desc: "Resume scanner" },
+  { href: "/resumes", icon: FileText,  label: "Skill Gap", desc: "Resume & gap analysis" },
+];
+
+function JobsDropdown() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[13.5px] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] ${
+          open ? "bg-[var(--color-surface-2)] text-[var(--color-text)]" : "text-[var(--color-text-2)]"
+        }`}
+      >
+        Career
+        <ChevronDown
+          className={`w-3.5 h-3.5 opacity-60 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-52 rounded-xl bg-[var(--color-surface)] shadow-xl ring-1 ring-[var(--color-border)] py-1.5 z-50 fade-up">
+          {JOBS_ITEMS.map(({ href, icon: Icon, label, desc }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex items-center gap-3 px-3 py-2.5 text-[var(--color-text-2)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
+              onClick={() => setOpen(false)}
+            >
+              <span className="shrink-0 w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                <Icon className="w-3.5 h-3.5 text-indigo-500" />
+              </span>
+              <span>
+                <span className="block text-[13px] font-medium leading-tight">{label}</span>
+                <span className="block text-[11px] text-[var(--color-text-3)] leading-tight mt-0.5">{desc}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PrepDropdown() {
   const [open, setOpen] = useState(false);
@@ -109,18 +158,12 @@ export function TopBar() {
             Applications
           </Link>
           <Link
-            href="/jobs"
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
-          >
-            <Zap className="w-4 h-4" />
-            Jobs
-          </Link>
-          <Link
             href="/referrals"
             className="px-3 py-1.5 rounded-md hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] transition-colors"
           >
             Referrals
           </Link>
+          <JobsDropdown />
           <PrepDropdown />
           <Link
             href="/nudges"

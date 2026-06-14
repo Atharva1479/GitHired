@@ -301,7 +301,7 @@ export default function SettingsPage() {
         <SectionHeading>AI Provider</SectionHeading>
         <Card>
           <p className="text-[12.5px] text-[var(--color-text-2)] mb-4">
-            Choose which LLM powers Pilot.{" "}
+            Choose which LLM powers Jarvis.{" "}
             <strong className="text-[var(--color-text)]">Auto</strong> uses Gemini first and
             falls back to Ollama when the free-tier quota runs out.
           </p>
@@ -367,8 +367,8 @@ export default function SettingsPage() {
           )}
         </Card>
 
-        {/* ── Pilot Voice ──────────────────────────────────── */}
-        <SectionHeading>Pilot Voice</SectionHeading>
+        {/* ── Jarvis Voice ──────────────────────────────────── */}
+        <SectionHeading>Jarvis Voice</SectionHeading>
         <Card>
           <p className="text-[12.5px] text-[var(--color-text-2)] mb-4">
             Click <Play className="inline w-3 h-3 mb-0.5" /> to hear a preview, then click a
@@ -396,7 +396,7 @@ export default function SettingsPage() {
         <Card>
           <ToggleRow
             label="Auto-greet on login"
-            sub="Pilot greets you by voice after each new login"
+            sub="Jarvis greets you by voice after each new login"
             on={settings.auto_brief_enabled}
             disabled={update.isPending}
             onToggle={() => save({ auto_brief_enabled: !settings.auto_brief_enabled })}
@@ -410,13 +410,13 @@ export default function SettingsPage() {
           />
           <ToggleRow
             label="Continuous listening"
-            sub="Re-arm mic after Pilot finishes speaking (device setting)"
+            sub="Re-arm mic after Jarvis finishes speaking (device setting)"
             on={continuous}
             onToggle={() => { const n = !continuous; setContinuous(n); writeLs(LS_CONTINUOUS, n); }}
           />
           <ToggleRow
             label="Interrupt on speak"
-            sub="Cut Pilot off when you start talking (device setting)"
+            sub="Cut Jarvis off when you start talking (device setting)"
             on={bargeIn}
             onToggle={() => { const n = !bargeIn; setBargeIn(n); writeLs(LS_BARGE_IN, n); }}
           />

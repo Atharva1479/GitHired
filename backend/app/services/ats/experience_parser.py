@@ -105,7 +105,16 @@ def parse_experience(jd_text: str, resume_text: str) -> dict:
         else:
             exp_score = 30
     else:
-        exp_score = 80 if total_years >= 1 else 50
+        if total_years >= 8:
+            exp_score = 100
+        elif total_years >= 5:
+            exp_score = 90
+        elif total_years >= 3:
+            exp_score = 80
+        elif total_years >= 1:
+            exp_score = 70
+        else:
+            exp_score = 50
 
     degree_keywords = get_degree_keywords()
     resume_lower = resume_text.lower()
