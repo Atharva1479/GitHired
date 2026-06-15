@@ -89,6 +89,17 @@ class Settings(BaseSettings):
     resend_from_email: str = "JobPilot <digest@jobpilot.app>"
     digest_enabled: bool = False   # flip to True once RESEND_API_KEY is set
 
+    # ── LangChain / LangSmith observability ──────────────────────────────────
+    # Set LANGSMITH_API_KEY + LANGCHAIN_TRACING_V2=true to enable tracing.
+    # Free tier covers thousands of traces/month. Leave blank to disable.
+    langsmith_api_key: SecretStr = SecretStr("")
+    langsmith_project: str = "githired-interview"
+    langchain_tracing_v2: bool = False
+
+    # ── Interview AI (LangGraph agent) ────────────────────────────────────────
+    interview_llm_provider: str = "gemini"   # gemini | groq | auto
+    groq_interview_model: str = "llama-3.3-70b-versatile"
+
     # ── Job Discovery ─────────────────────────────────────────────────────────
     # JSearch on RapidAPI: https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
     jsearch_api_key: str | None = None

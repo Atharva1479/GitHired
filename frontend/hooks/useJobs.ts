@@ -1,4 +1,5 @@
 "use client";
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -19,13 +20,23 @@ export const JOB_KEYS = {
   searches: () => ["jobs", "searches"] as const,
 };
 
-export function useJobSearch(params: SearchParams | null) {
-  return useQuery({
+export function useJobSearch(params: SearchParams | null, freshnessHours = 72) {
+  const query = useQuery({
     queryKey: JOB_KEYS.search(params ?? { q: "" }),
     queryFn: () => searchJobs(params!),
     enabled: !!params && params.q.trim().length > 0,
-    staleTime: 1000 * 60 * 10,
+    staleTime: 1000 * 60 * 15,
   });
+
+  const filteredData = useMemo(
+    () =>
+      query.data?.filter(
+        (j) => j.hours_old === null || j.hours_old <= freshnessHours,
+      ) ?? [],
+    [query.data, freshnessHours],
+  );
+
+  return { ...query, filteredData };
 }
 
 export function useSavedSearches() {

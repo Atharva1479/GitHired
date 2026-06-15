@@ -97,3 +97,52 @@ export async function getHistory(): Promise<HistoryItem[]> {
 export async function deleteSession(sessionId: number): Promise<void> {
   await apiFetch(`/interview/sessions/${sessionId}`, { method: "DELETE" });
 }
+
+// ── Agent mode ────────────────────────────────────────────────────────────────
+
+export interface StartAgentSessionRequest {
+  topic: string;
+  role: string;
+  years_exp: string;
+  difficulty: "easy" | "medium" | "hard";
+  target_turns: number;
+  jd_text?: string;
+}
+
+export interface StartAgentSessionResponse {
+  session_id: number;
+  thread_id: string;
+  first_question: string;
+  topic_clusters: string[];
+  target_turns: number;
+  agent_mode: true;
+}
+
+export interface SubmitAnswerResponse {
+  next_question: string | null;
+  question_number: number;
+  followup_depth: number;
+  interview_complete: boolean;
+  agent_status: "asking" | "wrapping_up" | "done";
+}
+
+export async function startAgentSession(
+  body: StartAgentSessionRequest,
+): Promise<StartAgentSessionResponse> {
+  return apiFetch("/interview/sessions/agent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function submitAnswer(
+  sessionId: number,
+  answer: string,
+): Promise<SubmitAnswerResponse> {
+  return apiFetch(`/interview/sessions/${sessionId}/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answer }),
+  });
+}

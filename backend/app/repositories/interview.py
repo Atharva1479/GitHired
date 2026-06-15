@@ -14,6 +14,66 @@ from app.models import (
 )
 
 
+async def create_agent_session(
+    conn: asyncpg.Connection,
+    user_id: int,
+    topic: str,
+    role: str,
+    years_exp: str,
+    target_turns: int,
+    thread_id: str,
+) -> InterviewSession:
+    """Create an interview session in agent mode with a LangGraph thread_id."""
+    row = await conn.fetchrow(
+        """
+        INSERT INTO interview_sessions
+            (user_id, topic, role, years_exp, duration_min, total_questions, agent_mode, agent_thread_id)
+        VALUES ($1, $2, $3, $4, 0, $5, true, $6)
+        RETURNING *
+        """,
+        user_id, topic, role, years_exp, target_turns, thread_id,
+    )
+    return InterviewSession.model_validate(dict(row))
+
+
+async def save_agent_turn(
+    conn: asyncpg.Connection,
+    session_id: int,
+    question_index: int,
+    question: str,
+    user_answer: str,
+    score: int,
+    feedback: str,
+    ideal_answer: str,
+    turn_type: str,
+    followup_depth: int,
+    parent_turn_id: int | None,
+    agent_decision: str | None,
+) -> InterviewTurn:
+    """Save a turn produced by the LangGraph agent."""
+    row = await conn.fetchrow(
+        """
+        INSERT INTO interview_turns
+            (session_id, question_index, question, user_answer,
+             turn_type, followup_depth, parent_turn_id, agent_decision)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+        """,
+        session_id, question_index, question, user_answer,
+        turn_type, followup_depth, parent_turn_id, agent_decision,
+    )
+    # Also write to question_reports for unified report queries
+    await conn.execute(
+        """
+        INSERT INTO interview_question_reports
+            (session_id, question_index, question, user_answer, ideal_answer, score, feedback)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        """,
+        session_id, question_index, question, user_answer, ideal_answer, score, feedback,
+    )
+    return InterviewTurn.model_validate(dict(row))
+
+
 async def create_session(
     conn: asyncpg.Connection,
     user_id: int,

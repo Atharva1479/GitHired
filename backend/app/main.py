@@ -7,8 +7,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from slowapi.errors import RateLimitExceeded
 
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
 from app.config import settings
 from app.database import close_db, init_db, pool
+from app.services import interview_graph as ig
 from app.exceptions import install_exception_handlers
 from app.routers import applications as applications_router
 from app.routers import auth as auth_router
@@ -81,8 +84,20 @@ async def lifespan(_: FastAPI):
         )
 
     asyncio.create_task(_prewarm_ats())
-    log.info("app.ready", nudge_cron_hour=settings.nudge_cron_hour)
-    yield
+
+    # Initialize LangGraph interview agent with PostgreSQL checkpointer.
+    # AsyncPostgresSaver.from_conn_string is an async context manager that opens
+    # a dedicated psycopg connection (separate from the asyncpg pool).
+    async with AsyncPostgresSaver.from_conn_string(str(settings.database_url)) as checkpointer:
+        try:
+            await ig.init_graph(checkpointer)
+        except Exception as exc:
+            log.warning("interview_graph.init_failed", error=str(exc))
+            # Non-fatal — existing scripted interview still works
+
+        log.info("app.ready", nudge_cron_hour=settings.nudge_cron_hour)
+        yield
+
     log.info("app.stopping")
     if not prewarm_task.done():
         prewarm_task.cancel()

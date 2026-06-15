@@ -127,6 +127,123 @@ _DIFFICULTY_CONTEXT = {
 }
 
 
+async def plan_interview_topics(
+    topic: str,
+    role: str,
+    years_exp: str,
+    difficulty: str,
+    jd_text: str | None = None,
+) -> dict[str, Any]:
+    """Generate an interview plan: topic clusters + opening question."""
+    jd_section = f"\n<job_description>\n{jd_text[:1500]}\n</job_description>" if jd_text else ""
+    prompt = f"""Output JSON ONLY. No markdown, no commentary.
+
+You are a senior interviewer planning a {topic} interview for a {role} with {years_exp} years of experience.
+Difficulty: {difficulty.upper()}{jd_section}
+
+Generate an interview plan with:
+1. topic_clusters: 3-5 specific skill areas to test (e.g. ["Core Concepts", "System Design", "Debugging"])
+2. opening_question: One strong opening question to start the interview
+3. opening_topic_tag: Which cluster the opening question belongs to
+
+Return exactly:
+{{
+  "topic_clusters": ["cluster1", "cluster2", ...],
+  "opening_question": "...",
+  "opening_topic_tag": "..."
+}}"""
+    result = await _call(prompt, max_tokens=400, temperature=0.4)
+    return {
+        "topic_clusters": list(result.get("topic_clusters", [topic])),
+        "opening_question": str(result.get("opening_question", "")),
+        "opening_topic_tag": str(result.get("opening_topic_tag", topic)),
+    }
+
+
+async def generate_next_question(
+    topic: str,
+    role: str,
+    difficulty: str,
+    topics_covered: list[str],
+    topic_scores: dict[str, list[int]],
+    topic_clusters: list[str],
+    turns: list[dict[str, Any]],
+    difficulty_adjustment: int = 0,
+) -> dict[str, Any]:
+    """Generate the next interview question based on coverage and performance."""
+    # Build coverage summary
+    coverage_lines = []
+    for t in topic_clusters:
+        scores = topic_scores.get(t, [])
+        if scores:
+            avg = sum(scores) / len(scores)
+            coverage_lines.append(f"  - {t}: tested ({len(scores)}x), avg score {avg:.1f}/10")
+        else:
+            coverage_lines.append(f"  - {t}: NOT YET TESTED")
+    coverage_text = "\n".join(coverage_lines) if coverage_lines else "  (no topics tested yet)"
+
+    adj_map = {-1: "slightly easier", 0: "same difficulty", 1: "harder"}
+    adj_note = f"Adjust difficulty: {adj_map.get(difficulty_adjustment, 'same difficulty')}."
+
+    # Last answer context (for continuity)
+    last_ctx = ""
+    if turns:
+        last = turns[-1]
+        last_ctx = f'\nLast answer score: {last.get("score", "?")}/10 on topic "{last.get("topic_tag", "")}".'
+
+    prompt = f"""Output JSON ONLY. No markdown, no commentary.
+
+You are interviewing a {role} ({years_exp} yrs exp) on {topic} at {difficulty.upper()} difficulty.
+
+Coverage so far:
+{coverage_text}{last_ctx}
+{adj_note}
+
+Pick the topic cluster with the least coverage or lowest scores. Generate one targeted question for it.
+
+Return exactly:
+{{
+  "question": "...",
+  "topic_tag": "..."
+}}"""
+    result = await _call(prompt, max_tokens=300, temperature=0.6)
+    return {
+        "question": str(result.get("question", "")),
+        "topic_tag": str(result.get("topic_tag", topic)),
+    }
+
+
+async def generate_followup_question(
+    topic: str,
+    role: str,
+    original_question: str,
+    weak_answer: str,
+    followup_depth: int,
+) -> dict[str, Any]:
+    """Generate a follow-up question targeting the weakness in the last answer."""
+    prompt = f"""Output JSON ONLY. No markdown, no commentary.
+
+You are interviewing a {role} on {topic}. The candidate gave a weak answer.
+
+Original question: {original_question}
+Candidate answer: {weak_answer[:500] if weak_answer.strip() else "[No answer provided]"}
+Follow-up depth: {followup_depth} (max 2)
+
+Generate ONE targeted follow-up that probes the specific gap. Be direct.
+Do NOT repeat the original question. Go deeper on the weakness.
+
+Return exactly:
+{{
+  "question": "...",
+  "topic_tag": "..."
+}}"""
+    result = await _call(prompt, max_tokens=200, temperature=0.5)
+    return {
+        "question": str(result.get("question", "")),
+        "topic_tag": str(result.get("topic_tag", topic)),
+    }
+
+
 async def generate_questions(
     topic: str,
     role: str,

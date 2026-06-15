@@ -13,11 +13,12 @@ import type { JobResult, SearchParams } from "@/types/jobs";
 
 export default function JobsPage() {
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
-  const [applyJob, setApplyJob]         = useState<JobResult | null>(null);
-  const [previewJob, setPreviewJob]     = useState<JobResult | null>(null);
-  const [appliedCount, setAppliedCount] = useState(0);
+  const [freshnessHours, setFreshnessHours] = useState(72);
+  const [applyJob, setApplyJob]             = useState<JobResult | null>(null);
+  const [previewJob, setPreviewJob]         = useState<JobResult | null>(null);
+  const [appliedCount, setAppliedCount]     = useState(0);
 
-  const { data: jobs, isLoading, error } = useJobSearch(searchParams);
+  const { data: allJobs, filteredData: jobs, isLoading, error } = useJobSearch(searchParams, freshnessHours);
   const { mutate: bookmarkJob } = useBookmarkJob();
 
   function handleApply(job: JobResult) {
@@ -57,7 +58,7 @@ export default function JobsPage() {
 
         {/* Search */}
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 mb-4">
-          <JobFilters onSearch={setSearchParams} isLoading={isLoading} />
+          <JobFilters onSearch={setSearchParams} onFreshnessChange={setFreshnessHours} isLoading={isLoading} />
         </div>
 
         {/* Saved searches */}
@@ -94,21 +95,37 @@ export default function JobsPage() {
           </div>
         )}
 
-        {jobs && jobs.length === 0 && searchParams && !isLoading && (
+        {/* No API results */}
+        {allJobs && allJobs.length === 0 && searchParams && !isLoading && (
           <div className="text-center py-16">
             <TrendingUp className="w-8 h-8 mx-auto mb-3 text-[var(--color-text-3)]" />
-            <p className="font-medium text-[var(--color-text-2)]">No fresh jobs found</p>
+            <p className="font-medium text-[var(--color-text-2)]">No jobs found in the last 3 days</p>
             <p className="text-sm text-[var(--color-text-3)] mt-1">
-              Try a broader keyword, different location, or extend the freshness window
+              Try a broader keyword or different location
             </p>
           </div>
         )}
 
-        {jobs && jobs.length > 0 && (
+        {/* Freshness filter is too narrow */}
+        {allJobs && allJobs.length > 0 && jobs.length === 0 && !isLoading && (
+          <div className="text-center py-16">
+            <TrendingUp className="w-8 h-8 mx-auto mb-3 text-[var(--color-text-3)]" />
+            <p className="font-medium text-[var(--color-text-2)]">No jobs in this time window</p>
+            <p className="text-sm text-[var(--color-text-3)] mt-1">
+              {allJobs.length} jobs found — try &quot;Last 3 days&quot; to see them all
+            </p>
+          </div>
+        )}
+
+        {jobs.length > 0 && (
           <>
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-[var(--color-text-3)]">
-                <span className="font-semibold text-[var(--color-text)]">{jobs.length}</span> fresh jobs · sorted by lowest competition
+                <span className="font-semibold text-[var(--color-text)]">{jobs.length}</span>
+                {allJobs && allJobs.length > jobs.length && (
+                  <span> / {allJobs.length}</span>
+                )}
+                {" "}jobs · sorted by lowest competition
               </p>
               {appliedCount > 0 && (
                 <span className="text-xs text-emerald-600 font-medium">✓ {appliedCount} applied this session</span>

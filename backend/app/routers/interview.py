@@ -2,20 +2,29 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 
 import asyncpg
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
+from langgraph.types import Command
 from pydantic import BaseModel
 
 from app.database import pool
 from app.deps import get_db, get_user_id
+from app.models import (
+    StartAgentSessionRequest,
+    StartAgentSessionResponse,
+    SubmitAnswerRequest,
+    SubmitAnswerResponse,
+)
 from app.services.interview_ai import (
     evaluate_turn,
     generate_questions,
     generate_report,
 )
+from app.services import interview_graph as ig
 from app.repositories import interview as repo
 
 log = structlog.get_logger("interview_router")
@@ -190,6 +199,153 @@ async def delete_session(
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
     return JSONResponse({"ok": True})
+
+
+@router.post("/sessions/agent", response_model=StartAgentSessionResponse, status_code=status.HTTP_201_CREATED)
+async def start_agent_session(
+    body: StartAgentSessionRequest,
+    conn: asyncpg.Connection = Depends(get_db),
+    user_id: int = Depends(get_user_id),
+) -> StartAgentSessionResponse:
+    """Start an agentic interview session backed by LangGraph."""
+    graph = ig.get_graph()
+    thread_id = str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+
+    session = await repo.create_agent_session(
+        conn, user_id, body.topic, body.role, body.years_exp, body.target_turns, thread_id
+    )
+
+    initial_state: dict = {
+        "session_id": session.id,
+        "user_id": user_id,
+        "topic": body.topic,
+        "role": body.role,
+        "years_exp": body.years_exp,
+        "difficulty": body.difficulty,
+        "jd_text": body.jd_text,
+        "target_turns": body.target_turns,
+        "topic_clusters": [],
+        "current_question": "",
+        "current_topic_tag": "",
+        "primary_questions_asked": 0,
+        "followup_depth": 0,
+        "turns": [],
+        "topics_covered": [],
+        "topic_scores": {},
+        "running_avg_score": 0.0,
+        "difficulty_adjustment": 0,
+        "last_decision": "",
+        "pending_answer": None,
+        "interview_complete": False,
+        "report_data": None,
+    }
+
+    try:
+        result = await graph.ainvoke(initial_state, config)
+    except Exception as exc:
+        log.error("interview.agent_start_failed", session_id=session.id, error=str(exc))
+        raise HTTPException(status_code=503, detail="Agent initialization failed. Try again.")
+
+    return StartAgentSessionResponse(
+        session_id=session.id,
+        thread_id=thread_id,
+        first_question=result.get("current_question", ""),
+        topic_clusters=result.get("topic_clusters", []),
+        target_turns=body.target_turns,
+    )
+
+
+@router.post("/sessions/{session_id}/answer", response_model=SubmitAnswerResponse)
+async def submit_agent_answer(
+    session_id: int,
+    body: SubmitAnswerRequest,
+    conn: asyncpg.Connection = Depends(get_db),
+    user_id: int = Depends(get_user_id),
+) -> SubmitAnswerResponse:
+    """Submit an answer to the current question and receive the next one."""
+    graph = ig.get_graph()
+
+    session = await repo.get_session(conn, session_id, user_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not session.agent_mode or not session.agent_thread_id:
+        raise HTTPException(status_code=400, detail="Not an agent-mode session")
+    if session.status != "active":
+        raise HTTPException(status_code=400, detail="Session already ended")
+
+    config = {"configurable": {"thread_id": session.agent_thread_id}}
+
+    try:
+        result = await graph.ainvoke(Command(resume=body.answer), config)
+    except Exception as exc:
+        log.error("interview.agent_answer_failed", session_id=session_id, error=str(exc))
+        raise HTTPException(status_code=503, detail="Agent processing failed. Try again.")
+
+    interview_complete = result.get("interview_complete", False)
+    turns: list = result.get("turns", [])
+    question_number = len(turns) + 1
+
+    # If a new turn was completed, persist it to DB
+    if turns:
+        last_turn = turns[-1]
+        if last_turn.get("turn_id") == -1:
+            # This turn hasn't been saved yet — determine parent_turn_id for follow-ups
+            parent_id = None
+            if last_turn.get("turn_type") == "followup" and len(turns) >= 2:
+                # Parent is the previous primary turn
+                for t in reversed(turns[:-1]):
+                    if t.get("turn_type") == "primary":
+                        parent_id = t.get("turn_id") if t.get("turn_id") != -1 else None
+                        break
+
+            saved = await repo.save_agent_turn(
+                conn,
+                session_id=session_id,
+                question_index=len(turns) - 1,
+                question=last_turn["question"],
+                user_answer=last_turn["user_answer"],
+                score=last_turn["score"],
+                feedback=last_turn["feedback"],
+                ideal_answer=last_turn.get("ideal_answer", ""),
+                turn_type=last_turn.get("turn_type", "primary"),
+                followup_depth=last_turn.get("followup_depth", 0),
+                parent_turn_id=parent_id,
+                agent_decision=result.get("last_decision"),
+            )
+            # Update the turn_id in the checkpoint (best-effort; non-fatal)
+            turns[-1]["turn_id"] = saved.id
+
+    if interview_complete:
+        await repo.end_session(conn, session_id)
+        report_data = result.get("report_data")
+        if report_data:
+            async with pool().acquire() as bg_conn:
+                await repo.save_report(
+                    bg_conn, session_id,
+                    report_data.get("overall_score", 0),
+                    report_data.get("skill_breakdown", {}),
+                    report_data.get("summary", ""),
+                )
+        return SubmitAnswerResponse(
+            next_question=None,
+            question_number=question_number,
+            followup_depth=0,
+            interview_complete=True,
+            agent_status="done",
+        )
+
+    followup_depth = result.get("followup_depth", 0)
+    last_decision = result.get("last_decision", "")
+    agent_status = "wrapping_up" if last_decision == "wrap_up" else "asking"
+
+    return SubmitAnswerResponse(
+        next_question=result.get("current_question"),
+        question_number=question_number,
+        followup_depth=followup_depth,
+        interview_complete=False,
+        agent_status=agent_status,
+    )
 
 
 @router.get("/history")

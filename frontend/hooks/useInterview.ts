@@ -6,7 +6,9 @@ import {
   endSession,
   getHistory,
   getReport,
+  startAgentSession,
   startSession,
+  submitAnswer,
   submitTurn,
 } from "@/lib/interview-api";
 
@@ -63,5 +65,16 @@ export function useDeleteSession() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: INTERVIEW_KEYS.history() });
     },
+  });
+}
+
+export function useStartAgentSession() {
+  return useMutation({ mutationFn: startAgentSession });
+}
+
+export function useSubmitAnswer() {
+  return useMutation({
+    mutationFn: ({ sessionId, answer }: { sessionId: number; answer: string }) =>
+      submitAnswer(sessionId, answer),
   });
 }

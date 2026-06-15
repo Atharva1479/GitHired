@@ -26,7 +26,6 @@ export default function SavedSearchPanel({ currentParams, onLoad }: SavedSearchP
         location: currentParams.location,
         remote_only: currentParams.remote_only,
         experience: currentParams.experience,
-        freshness_hours: currentParams.freshness_hours ?? 24,
       },
       { onSuccess: () => { setShowForm(false); setName(""); } },
     );
@@ -40,7 +39,7 @@ export default function SavedSearchPanel({ currentParams, onLoad }: SavedSearchP
       {searches?.map((s) => (
         <div
           key={s.id}
-          onClick={() => onLoad({ q: s.query, location: s.location ?? undefined, remote_only: s.remote_only, experience: s.experience ?? undefined, freshness_hours: s.freshness_hours })}
+          onClick={() => onLoad({ q: s.query, location: s.location ?? undefined, remote_only: s.remote_only, experience: s.experience ?? undefined })}
           className="group flex items-center gap-1 px-3 py-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs hover:border-indigo-400 transition-colors cursor-pointer"
         >
           {s.name}

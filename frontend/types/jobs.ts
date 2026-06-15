@@ -48,9 +48,7 @@ export interface SearchParams {
   location?: string;
   remote_only?: boolean;
   experience?: string;
-  freshness_hours?: number;
-  employment_type?: string;  // "full-time" | "part-time" | "contract" | "internship"
-  page?: number;
+  employment_type?: string;  // client-side filter only
 }
 
 export interface ApplyAndTrackResponse {

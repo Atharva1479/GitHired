@@ -3,16 +3,33 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Mic, MicOff, Volume2 } from "lucide-react";
 
-import { useEndSession, useSubmitTurn } from "@/hooks/useInterview";
+import { useEndSession, useSubmitAnswer, useSubmitTurn } from "@/hooks/useInterview";
 import InterviewOrb, { type OrbState } from "./InterviewOrb";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 const LS_ORB_MODE = "githired_interview_orb_mode";
 
-interface SessionState {
+interface ScriptedSessionState {
   session_id: number;
   questions: string[];
   total_questions: number;
+}
+
+interface AgentSessionState {
+  session_id: number;
+  thread_id: string;
+  current_question: string;
+  question_number: number;
+  followup_depth: number;
+  target_turns: number;
+  topic_clusters: string[];
+  agent_mode: true;
+}
+
+type SessionState = ScriptedSessionState | AgentSessionState;
+
+function isAgentSession(s: SessionState): s is AgentSessionState {
+  return (s as AgentSessionState).agent_mode === true;
 }
 
 function readOrbMode(): boolean {
@@ -28,9 +45,16 @@ export default function SessionView() {
   const router = useRouter();
   const { mutateAsync: submitTurn } = useSubmitTurn();
   const { mutateAsync: endSession } = useEndSession();
+  const { mutateAsync: submitAgentAnswerMut } = useSubmitAnswer();
 
   const [session, setSession]           = useState<SessionState | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Agent mode: dynamic current question tracked separately
+  const [agentQuestion, setAgentQuestion]   = useState("");
+  const [questionNumber, setQuestionNumber] = useState(1);
+  const [followupDepth, setFollowupDepth]   = useState(0);
+  const [isThinking, setIsThinking]         = useState(false);
+
   const [isPlaying, setIsPlaying]       = useState(false);
   const [isRecording, setIsRecording]   = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -53,7 +77,14 @@ export default function SessionView() {
     if (!raw) { router.replace("/interview"); return; }
     const s = JSON.parse(raw) as SessionState;
     setSession(s);
-    void speakQuestion(s.questions[0]);
+    if (isAgentSession(s)) {
+      setAgentQuestion(s.current_question);
+      setQuestionNumber(s.question_number);
+      setFollowupDepth(s.followup_depth);
+      void speakQuestion(s.current_question);
+    } else {
+      void speakQuestion(s.questions[0]);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -120,6 +151,29 @@ export default function SessionView() {
 
   async function submitAnswer() {
     if (!session || !transcript.trim()) return;
+
+    if (isAgentSession(session)) {
+      const q = agentQuestion;
+      setHistory((prev) => [...prev, { question: q, answer: transcript }]);
+      const ans = transcript;
+      setTranscript("");
+      setIsThinking(true);
+      try {
+        const res = await submitAgentAnswerMut({ sessionId: session.session_id, answer: ans });
+        if (res.interview_complete) {
+          await handleEnd();
+        } else {
+          setAgentQuestion(res.next_question ?? "");
+          setQuestionNumber(res.question_number);
+          setFollowupDepth(res.followup_depth);
+          await speakQuestion(res.next_question ?? "");
+        }
+      } finally {
+        setIsThinking(false);
+      }
+      return;
+    }
+
     const q = session.questions[currentIndex];
     await submitTurn({
       sessionId: session.session_id,
@@ -141,6 +195,27 @@ export default function SessionView() {
 
   async function skipQuestion() {
     if (!session) return;
+
+    if (isAgentSession(session)) {
+      const q = agentQuestion;
+      setHistory((prev) => [...prev, { question: q, answer: "[Skipped]" }]);
+      setIsThinking(true);
+      try {
+        const res = await submitAgentAnswerMut({ sessionId: session.session_id, answer: "[Skipped]" });
+        if (res.interview_complete) {
+          await handleEnd();
+        } else {
+          setAgentQuestion(res.next_question ?? "");
+          setQuestionNumber(res.question_number);
+          setFollowupDepth(res.followup_depth);
+          await speakQuestion(res.next_question ?? "");
+        }
+      } finally {
+        setIsThinking(false);
+      }
+      return;
+    }
+
     const q = session.questions[currentIndex];
     await submitTurn({
       sessionId: session.session_id,
@@ -188,10 +263,13 @@ export default function SessionView() {
     );
   }
 
-  const currentQuestion = session.questions[currentIndex];
-  const progress        = (currentIndex / session.total_questions) * 100;
+  const agentMode = isAgentSession(session);
+  const currentQuestion = agentMode ? agentQuestion : session.questions[currentIndex];
+  const totalQ = agentMode ? session.target_turns : session.total_questions;
+  const displayIndex = agentMode ? questionNumber - 1 : currentIndex;
+  const progress = (displayIndex / totalQ) * 100;
   const orbState: OrbState = isRecording ? "listening" : isPlaying ? "speaking" : "idle";
-  const isLast = currentIndex + 1 >= session.total_questions;
+  const isLast = agentMode ? false : currentIndex + 1 >= session.total_questions;
 
   const endConfirmModal = showEndConfirm && (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -230,10 +308,24 @@ export default function SessionView() {
 
         {/* Top bar */}
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #1a1a2e" }}>
-          <span className="text-sm font-semibold" style={{ color: "#a5b4fc" }}>AI Interview</span>
-          <span className="text-sm" style={{ color: "#555" }}>
-            {currentIndex + 1} / {session.total_questions}
+          <span className="text-sm font-semibold flex items-center gap-2" style={{ color: "#a5b4fc" }}>
+            AI Interview
+            {agentMode && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#3b0764", color: "#c084fc" }}>
+                ADAPTIVE
+              </span>
+            )}
           </span>
+          <div className="flex items-center gap-2">
+            {agentMode && followupDepth > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#1e1b4b", color: "#818cf8" }}>
+                Follow-up ↩
+              </span>
+            )}
+            <span className="text-sm" style={{ color: "#555" }}>
+              {displayIndex + 1} / {totalQ}
+            </span>
+          </div>
           <button
             onClick={requestEnd}
             disabled={ending}
@@ -258,25 +350,30 @@ export default function SessionView() {
 
           {/* Status label */}
           <div className="text-center min-h-[20px]">
-            {isPlaying && (
+            {isThinking && (
+              <p className="text-sm animate-pulse" style={{ color: "#c084fc" }}>
+                Agent is thinking…
+              </p>
+            )}
+            {!isThinking && isPlaying && (
               <p className="text-sm animate-pulse" style={{ color: "#818cf8" }}>
                 AI is speaking…
               </p>
             )}
-            {isRecording && (
+            {!isThinking && isRecording && (
               <p className="text-sm animate-pulse" style={{ color: "#f87171" }}>
                 Recording your answer…
               </p>
             )}
-            {isTranscribing && (
+            {!isThinking && isTranscribing && (
               <p className="text-sm" style={{ color: "#555" }}>
                 Transcribing…
               </p>
             )}
-            {!isPlaying && !isRecording && !isTranscribing && transcript && (
+            {!isThinking && !isPlaying && !isRecording && !isTranscribing && transcript && (
               <p className="text-sm" style={{ color: "#6366f1" }}>Answer captured — submit when ready</p>
             )}
-            {!isPlaying && !isRecording && !isTranscribing && !transcript && (
+            {!isThinking && !isPlaying && !isRecording && !isTranscribing && !transcript && (
               <p className="text-sm" style={{ color: "#444" }}>Your turn — record your answer</p>
             )}
           </div>
@@ -296,7 +393,7 @@ export default function SessionView() {
             {/* Mic button — large circle */}
             <button
               onClick={isRecording ? stopRecording : startRecording}
-              disabled={isPlaying || ending || isTranscribing}
+              disabled={isPlaying || ending || isTranscribing || isThinking}
               className="flex items-center justify-center rounded-full transition-all disabled:opacity-40"
               style={{
                 width: 64,
@@ -315,17 +412,17 @@ export default function SessionView() {
             {/* Submit */}
             <button
               onClick={submitAnswer}
-              disabled={!transcript.trim() || ending || isTranscribing}
+              disabled={!transcript.trim() || ending || isTranscribing || isThinking}
               className="px-6 py-3 rounded-xl font-semibold text-sm transition-colors disabled:opacity-40"
-              style={{ background: "#4f46e5", color: "#fff" }}
+              style={{ background: agentMode ? "#7c3aed" : "#4f46e5", color: "#fff" }}
             >
-              {isLast ? "Finish Interview" : "Next →"}
+              {isThinking ? <Loader2 className="w-4 h-4 animate-spin" /> : isLast ? "Finish Interview" : "Next →"}
             </button>
 
             {/* Skip */}
             <button
               onClick={skipQuestion}
-              disabled={isRecording || ending || isTranscribing}
+              disabled={isRecording || ending || isTranscribing || isThinking}
               className="text-xs disabled:opacity-30 transition-colors hover:underline"
               style={{ color: "#555" }}
             >
@@ -361,10 +458,20 @@ export default function SessionView() {
       {endConfirmModal}
 
       <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
-        <span className="text-sm font-semibold">AI Interview</span>
-        <span className="text-sm text-[var(--color-text-2)]">
-          Question {currentIndex + 1} / {session.total_questions}
+        <span className="text-sm font-semibold flex items-center gap-2">
+          AI Interview
+          {agentMode && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500">ADAPTIVE</span>
+          )}
         </span>
+        <div className="flex items-center gap-2">
+          {agentMode && followupDepth > 0 && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400">Follow-up ↩</span>
+          )}
+          <span className="text-sm text-[var(--color-text-2)]">
+            Question {displayIndex + 1} / {totalQ}
+          </span>
+        </div>
         <button
           onClick={requestEnd}
           disabled={ending}
@@ -401,7 +508,7 @@ export default function SessionView() {
         <div className="flex gap-4 items-center">
           <button
             onClick={isRecording ? stopRecording : startRecording}
-            disabled={isPlaying || ending || isTranscribing}
+            disabled={isPlaying || ending || isTranscribing || isThinking}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50 ${
               isRecording
                 ? "bg-red-500 text-white animate-pulse"
@@ -412,21 +519,26 @@ export default function SessionView() {
           </button>
           <button
             onClick={submitAnswer}
-            disabled={!transcript.trim() || ending || isTranscribing}
-            className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            disabled={!transcript.trim() || ending || isTranscribing || isThinking}
+            className={`px-6 py-3 rounded-xl text-white font-semibold text-sm disabled:opacity-50 transition-colors flex items-center gap-2 ${
+              agentMode ? "bg-violet-600 hover:bg-violet-700" : "bg-indigo-600 hover:bg-indigo-700"
+            }`}
           >
-            {isLast ? "Finish Interview" : "Next Question →"}
+            {isThinking
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Thinking…</>
+              : isLast ? "Finish Interview" : "Next Question →"}
           </button>
           <button
             onClick={skipQuestion}
-            disabled={isRecording || ending || isTranscribing}
+            disabled={isRecording || ending || isTranscribing || isThinking}
             className="text-xs text-[var(--color-text-3)] hover:underline disabled:opacity-40 transition-colors"
           >
             Skip
           </button>
         </div>
 
-        {isPlaying && <p className="text-xs text-[var(--color-text-3)] animate-pulse">AI is speaking…</p>}
+        {isThinking && <p className="text-xs text-violet-400 animate-pulse">Agent is thinking…</p>}
+        {!isThinking && isPlaying && <p className="text-xs text-[var(--color-text-3)] animate-pulse">AI is speaking…</p>}
       </div>
 
       {history.length > 0 && (

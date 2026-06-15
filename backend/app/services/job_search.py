@@ -2,6 +2,11 @@
 
 Queries JSearch + Adzuna in parallel, deduplicates, caches results in
 PostgreSQL, and enriches each job with freshness + competition scores.
+
+Always fetches the last 3 days across two pages per API (3 concurrent
+requests: JSearch num_pages=2, Adzuna page 1, Adzuna page 2).
+Cache-first: skips API calls when >=15 unexpired FTS-matched rows exist.
+Freshness filtering is client-side — the full 3-day set is returned.
 """
 from __future__ import annotations
 
@@ -92,6 +97,44 @@ def _cache_key(source: str, external_id: str) -> str:
     return f"{source}:{external_id}"
 
 
+def _enrich_row(
+    row: asyncpg.Record,
+    bookmark_map: dict[str, str],
+) -> dict[str, Any]:
+    """Build result dict from a job_cache row + bookmark lookup."""
+    f = _freshness(row["posted_at"])
+    bm_key = f"{row['source']}:{row['external_id']}"
+    return {
+        "id": row["id"],
+        "source": row["source"],
+        "external_id": row["external_id"],
+        "title": row["title"],
+        "company": row["company"],
+        "location": row["location"],
+        "description": row["description"],
+        "apply_url": row["apply_url"],
+        "posted_at": row["posted_at"],
+        "employment_type": row["employment_type"],
+        "skills": list(row["skills"] or []),
+        **f,
+        "velocity_label": _velocity_label(f["hours_old"], row.get("first_seen_at")),
+        "bookmark_status": bookmark_map.get(bm_key),
+    }
+
+
+async def _build_bookmark_map(
+    conn: asyncpg.Connection,
+    user_id: int | None,
+) -> dict[str, str]:
+    if user_id is None:
+        return {}
+    bm_rows = await conn.fetch(
+        "SELECT source, external_id, status FROM job_bookmarks WHERE user_id = $1",
+        user_id,
+    )
+    return {f"{bm['source']}:{bm['external_id']}": bm["status"] for bm in bm_rows}
+
+
 async def _upsert_jobs(
     conn: asyncpg.Connection,
     jobs: list[dict[str, Any]],
@@ -139,42 +182,80 @@ async def _upsert_jobs(
     return rows
 
 
+async def _query_cache(
+    conn: asyncpg.Connection,
+    query: str,
+    location: str | None,
+    user_id: int | None,
+) -> list[dict[str, Any]]:
+    """Return enriched jobs from job_cache using FTS — skips API calls on warm cache.
+
+    Returns up to 60 unexpired rows matching the query via PostgreSQL full-text search.
+    """
+    rows = await conn.fetch(
+        """
+        SELECT *
+        FROM job_cache
+        WHERE expires_at > now()
+          AND (
+            to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(description, ''))
+            @@ plainto_tsquery('english', $1)
+          )
+          AND ($2::text IS NULL OR location ILIKE '%' || $2 || '%')
+        ORDER BY posted_at DESC NULLS LAST
+        LIMIT 60
+        """,
+        query, location,
+    )
+    if not rows:
+        return []
+    bookmark_map = await _build_bookmark_map(conn, user_id)
+    results = [_enrich_row(r, bookmark_map) for r in rows]
+    results.sort(key=lambda x: x["freshness_score"], reverse=True)
+    return results
+
+
 async def search_jobs(
     conn: asyncpg.Connection,
     query: str,
     location: str | None = None,
     remote_only: bool = False,
     experience: str | None = None,
-    freshness_hours: int = 24,
     user_id: int | None = None,
-    page: int = 1,
 ) -> list[dict[str, Any]]:
-    """Query both APIs, cache results, enrich with freshness, return sorted list."""
-    if freshness_hours <= 24:
-        jsearch_date = "today"
-    elif freshness_hours <= 72:
-        jsearch_date = "3days"
-    else:
-        jsearch_date = "week"
+    """Fetch jobs for last 3 days (2 pages per API), cache, and return sorted list.
 
-    jsearch_results, adzuna_results = await asyncio.gather(
+    Cache-first: returns from job_cache when >=15 FTS-matched rows are unexpired.
+    Remote-only searches always hit the API (no is_remote column in cache).
+    No server-side freshness post-filter — the full 3-day set is returned so the
+    frontend can filter client-side without triggering a new request.
+    """
+    if not remote_only:
+        cached = await _query_cache(conn, query, location, user_id)
+        if len(cached) >= 15:
+            log.info("job_search.cache_hit", query=query, total=len(cached))
+            return cached
+
+    # Fetch 3-day window: JSearch (num_pages=2) + Adzuna pages 1 and 2 in parallel.
+    jsearch_raw, adzuna_p1, adzuna_p2 = await asyncio.gather(
         jsearch_client.search(
             query=query,
             location=location,
             remote_only=remote_only,
             experience=experience,
-            date_posted=jsearch_date,
-            page=page,
+            date_posted="3days",
+            page=1,
+            num_pages=2,
         ),
-        adzuna_client.search(
-            query=query,
-            location=location,
-            max_days_old=max(1, freshness_hours // 24),
-            page=page,
-        ),
+        adzuna_client.search(query=query, location=location, max_days_old=3, page=1),
+        adzuna_client.search(query=query, location=location, max_days_old=3, page=2),
+        return_exceptions=True,
     )
 
-    all_raw = jsearch_results + adzuna_results
+    all_raw: list[dict[str, Any]] = []
+    for batch in (jsearch_raw, adzuna_p1, adzuna_p2):
+        if isinstance(batch, list):
+            all_raw.extend(batch)
 
     seen: set[str] = set()
     unique: list[dict[str, Any]] = []
@@ -185,53 +266,14 @@ async def search_jobs(
             unique.append(j)
 
     cached_rows = await _upsert_jobs(conn, unique)
+    bookmark_map = await _build_bookmark_map(conn, user_id)
 
-    bookmark_map: dict[str, str] = {}
-    if user_id is not None:
-        bm_rows = await conn.fetch(
-            "SELECT source, external_id, status FROM job_bookmarks WHERE user_id = $1",
-            user_id,
-        )
-        for bm in bm_rows:
-            bookmark_map[f"{bm['source']}:{bm['external_id']}"] = bm["status"]
-
-    results: list[dict[str, Any]] = []
-    for row in cached_rows:
-        f = _freshness(row["posted_at"])
-        bm_key = f"{row['source']}:{row['external_id']}"
-        results.append({
-            "id": row["id"],
-            "source": row["source"],
-            "external_id": row["external_id"],
-            "title": row["title"],
-            "company": row["company"],
-            "location": row["location"],
-            "description": row["description"],
-            "apply_url": row["apply_url"],
-            "posted_at": row["posted_at"],
-            "employment_type": row["employment_type"],
-            "skills": list(row["skills"] or []),
-            **f,
-            "velocity_label": _velocity_label(f["hours_old"], row.get("first_seen_at")),
-            "bookmark_status": bookmark_map.get(bm_key),
-        })
-
+    results = [_enrich_row(row, bookmark_map) for row in cached_rows]
     results.sort(key=lambda x: x["freshness_score"], reverse=True)
-
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=freshness_hours)
-    def _within_cutoff(posted_at: datetime | None) -> bool:
-        if posted_at is None:
-            return True
-        if posted_at.tzinfo is None:
-            posted_at = posted_at.replace(tzinfo=timezone.utc)
-        return posted_at >= cutoff
-
-    results = [r for r in results if _within_cutoff(r["posted_at"])]
 
     log.info(
         "job_search.completed",
-        query=query, total=len(results),
-        jsearch=len(jsearch_results), adzuna=len(adzuna_results),
+        query=query, total=len(results), raw=len(all_raw),
     )
     return results
 
@@ -261,34 +303,5 @@ async def get_similar_jobs(
         job_cache_id, source_row["title"], limit,
     )
 
-    bookmark_map: dict[str, str] = {}
-    if user_id is not None:
-        bm_rows = await conn.fetch(
-            "SELECT source, external_id, status FROM job_bookmarks WHERE user_id = $1",
-            user_id,
-        )
-        for bm in bm_rows:
-            bookmark_map[f"{bm['source']}:{bm['external_id']}"] = bm["status"]
-
-    results: list[dict[str, Any]] = []
-    for row in rows:
-        f = _freshness(row["posted_at"])
-        bm_key = f"{row['source']}:{row['external_id']}"
-        results.append({
-            "id": row["id"],
-            "source": row["source"],
-            "external_id": row["external_id"],
-            "title": row["title"],
-            "company": row["company"],
-            "location": row["location"],
-            "description": row["description"],
-            "apply_url": row["apply_url"],
-            "posted_at": row["posted_at"],
-            "employment_type": row["employment_type"],
-            "skills": list(row["skills"] or []),
-            **f,
-            "velocity_label": _velocity_label(f["hours_old"], row.get("first_seen_at")),
-            "bookmark_status": bookmark_map.get(bm_key),
-        })
-
-    return results
+    bookmark_map = await _build_bookmark_map(conn, user_id)
+    return [_enrich_row(row, bookmark_map) for row in rows]

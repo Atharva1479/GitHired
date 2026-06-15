@@ -6,6 +6,7 @@ import type { SearchParams } from "@/types/jobs";
 
 interface JobFiltersProps {
   onSearch: (params: SearchParams) => void;
+  onFreshnessChange?: (hours: number) => void;
   isLoading: boolean;
 }
 
@@ -32,13 +33,18 @@ const JOB_TYPES = [
   { value: "intern",   label: "Internship" },
 ];
 
-export default function JobFilters({ onSearch, isLoading }: JobFiltersProps) {
+export default function JobFilters({ onSearch, onFreshnessChange, isLoading }: JobFiltersProps) {
   const [query, setQuery]         = useState("");
   const [location, setLocation]   = useState("");
   const [experience, setExp]      = useState("");
-  const [freshness, setFreshness] = useState(24);
+  const [freshness, setFreshness] = useState(72);
   const [remoteOnly, setRemote]   = useState(false);
   const [jobType, setJobType]     = useState("");
+
+  function handleFreshnessChange(value: number) {
+    setFreshness(value);
+    onFreshnessChange?.(value);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -47,7 +53,6 @@ export default function JobFilters({ onSearch, isLoading }: JobFiltersProps) {
       q: query.trim(),
       location: location.trim() || undefined,
       experience: experience || undefined,
-      freshness_hours: freshness,
       remote_only: remoteOnly,
       employment_type: jobType || undefined,
     });
@@ -91,7 +96,7 @@ export default function JobFilters({ onSearch, isLoading }: JobFiltersProps) {
             <button
               key={o.value}
               type="button"
-              onClick={() => setFreshness(o.value)}
+              onClick={() => handleFreshnessChange(o.value)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 freshness === o.value
                   ? "bg-indigo-600 text-white"

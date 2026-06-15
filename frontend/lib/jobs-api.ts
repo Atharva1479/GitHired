@@ -24,11 +24,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 export async function searchJobs(params: SearchParams): Promise<JobResult[]> {
   const qs = new URLSearchParams();
   qs.set("q", params.q);
-  if (params.location) qs.set("location", params.location);
+  if (params.location)    qs.set("location", params.location);
   if (params.remote_only) qs.set("remote_only", "true");
-  if (params.experience) qs.set("experience", params.experience);
-  if (params.freshness_hours) qs.set("freshness_hours", String(params.freshness_hours));
-  if (params.page) qs.set("page", String(params.page));
+  if (params.experience)  qs.set("experience", params.experience);
   const jobs: JobResult[] = await apiFetch(`/jobs/search?${qs.toString()}`);
   // Client-side employment type filter (data already in results)
   if (params.employment_type) {

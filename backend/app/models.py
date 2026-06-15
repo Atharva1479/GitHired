@@ -404,6 +404,8 @@ class InterviewSession(BaseModel):
     status: str
     created_at: datetime
     ended_at: datetime | None = None
+    agent_mode: bool = False
+    agent_thread_id: str | None = None
 
 
 class InterviewTurn(BaseModel):
@@ -413,6 +415,42 @@ class InterviewTurn(BaseModel):
     question: str
     user_answer: str
     created_at: datetime
+    turn_type: str = "primary"
+    parent_turn_id: int | None = None
+    followup_depth: int = 0
+    agent_decision: str | None = None
+
+
+# ── LangGraph agent mode request/response models ──────────────────────────────
+
+class StartAgentSessionRequest(BaseModel):
+    topic: str = Field(min_length=1, max_length=100)
+    role: str = Field(min_length=1, max_length=100)
+    years_exp: str = Field(min_length=1, max_length=20)
+    difficulty: str = "medium"
+    target_turns: int = Field(default=7, ge=3, le=20)
+    jd_text: str | None = None
+
+
+class StartAgentSessionResponse(BaseModel):
+    session_id: int
+    thread_id: str
+    first_question: str
+    topic_clusters: list[str]
+    target_turns: int
+    agent_mode: bool = True
+
+
+class SubmitAnswerRequest(BaseModel):
+    answer: str
+
+
+class SubmitAnswerResponse(BaseModel):
+    next_question: str | None
+    question_number: int
+    followup_depth: int
+    interview_complete: bool
+    agent_status: str  # "asking" | "wrapping_up" | "done"
 
 
 class InterviewQuestionReport(BaseModel):

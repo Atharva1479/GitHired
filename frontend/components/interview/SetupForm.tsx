@@ -11,7 +11,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { useStartSession } from "@/hooks/useInterview";
+import { useStartAgentSession, useStartSession } from "@/hooks/useInterview";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -157,6 +157,7 @@ function DotPicker({ value, onChange }: { value: number; onChange: (n: number) =
 export default function SetupForm() {
   const router = useRouter();
   const { mutateAsync, isPending, error } = useStartSession();
+  const { mutateAsync: mutateAgent, isPending: isAgentPending, error: agentError } = useStartAgentSession();
 
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedTech, setSelectedTech] = useState<string | null>(null);
@@ -168,6 +169,7 @@ export default function SetupForm() {
   const [jdText, setJdText] = useState("");
   const [useCustomQ, setUseCustomQ] = useState(false);
   const [customQText, setCustomQText] = useState("");
+  const [agentMode, setAgentMode] = useState(false);
 
   const resolvedTopic = customTopic.trim() || selectedTech || selectedType || "";
   const parsedCustomQ = customQText
@@ -196,7 +198,8 @@ export default function SetupForm() {
   }
 
   const isJdBased = selectedType === "JD Based";
-  const canStart = !isPending && (
+  const anyPending = isPending || isAgentPending;
+  const canStart = !anyPending && (
     useCustomQ
       ? parsedCustomQ.length >= 1
       : resolvedTopic.trim().length > 0 && (!isJdBased || jdText.trim().length > 0)
@@ -204,23 +207,48 @@ export default function SetupForm() {
 
   async function handleStart() {
     if (!canStart) return;
-    const res = await mutateAsync({
-      topic: resolvedTopic || "Custom Interview",
-      role,
-      years_exp: yearsExp,
-      num_questions: useCustomQ ? parsedCustomQ.length : numQuestions,
-      difficulty,
-      jd_text: !useCustomQ && isJdBased ? jdText : undefined,
-      custom_questions: useCustomQ ? parsedCustomQ : undefined,
-    });
-    localStorage.setItem(
-      "jp_interview_session",
-      JSON.stringify({
-        session_id: res.session_id,
-        questions: res.questions,
-        total_questions: res.total_questions,
-      }),
-    );
+
+    if (agentMode && !useCustomQ) {
+      const res = await mutateAgent({
+        topic: resolvedTopic || "Custom Interview",
+        role,
+        years_exp: yearsExp,
+        difficulty,
+        target_turns: numQuestions,
+        jd_text: isJdBased ? jdText : undefined,
+      });
+      localStorage.setItem(
+        "jp_interview_session",
+        JSON.stringify({
+          session_id: res.session_id,
+          thread_id: res.thread_id,
+          current_question: res.first_question,
+          question_number: 1,
+          followup_depth: 0,
+          target_turns: res.target_turns,
+          topic_clusters: res.topic_clusters,
+          agent_mode: true,
+        }),
+      );
+    } else {
+      const res = await mutateAsync({
+        topic: resolvedTopic || "Custom Interview",
+        role,
+        years_exp: yearsExp,
+        num_questions: useCustomQ ? parsedCustomQ.length : numQuestions,
+        difficulty,
+        jd_text: !useCustomQ && isJdBased ? jdText : undefined,
+        custom_questions: useCustomQ ? parsedCustomQ : undefined,
+      });
+      localStorage.setItem(
+        "jp_interview_session",
+        JSON.stringify({
+          session_id: res.session_id,
+          questions: res.questions,
+          total_questions: res.total_questions,
+        }),
+      );
+    }
     router.push("/interview/session");
   }
 
@@ -315,7 +343,35 @@ export default function SetupForm() {
 
       <Divider />
 
+      {/* ── Adaptive AI Mode Toggle ── */}
+      <div className={`flex items-center justify-between mb-4 p-3.5 rounded-xl border transition-all ${
+        agentMode ? "border-violet-500 bg-violet-500/6" : "border-[var(--color-border)]"
+      }`}>
+        <div>
+          <p className="text-sm font-semibold text-[var(--color-text)] flex items-center gap-2">
+            <span>Adaptive AI Mode</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-500">BETA</span>
+          </p>
+          <p className="text-xs text-[var(--color-text-3)] mt-0.5">
+            LangGraph agent — dynamic follow-ups, real-time difficulty adaptation
+          </p>
+        </div>
+        <button
+          onClick={() => { setAgentMode((v) => !v); setUseCustomQ(false); }}
+          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+            agentMode ? "bg-violet-600" : "bg-[var(--color-border)]"
+          }`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              agentMode ? "translate-x-5" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
+
       {/* ── Custom Questions Toggle ── */}
+      {!agentMode && (
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-sm font-semibold text-[var(--color-text)]">Use my own questions</p>
@@ -334,6 +390,7 @@ export default function SetupForm() {
           />
         </button>
       </div>
+      )}
 
       {useCustomQ && (
         <>
@@ -428,9 +485,9 @@ export default function SetupForm() {
         </div>
       </div>
 
-      {error && (
+      {(error || agentError) && (
         <div className="mt-5 text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-xl">
-          {(error as Error).message}
+          {((error || agentError) as Error).message}
         </div>
       )}
 
@@ -441,20 +498,26 @@ export default function SetupForm() {
           disabled={!canStart}
           className={`w-full py-4 rounded-2xl font-bold text-[15px] transition-all flex items-center justify-center gap-3 ${
             canStart
-              ? "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-xl shadow-indigo-500/25"
+              ? agentMode
+                ? "bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-xl shadow-violet-500/25"
+                : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-xl shadow-indigo-500/25"
               : "bg-[var(--color-border)] text-[var(--color-text-3)] cursor-not-allowed"
           }`}
         >
-          {isPending ? (
+          {anyPending ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Generating questions…
+              {agentMode ? "Initialising agent…" : "Generating questions…"}
             </>
           ) : (
             <>
               <Mic className="w-4 h-4" />
-              Start Interview
-              {useCustomQ ? (
+              {agentMode ? "Start Adaptive Interview" : "Start Interview"}
+              {agentMode ? (
+                <span className="text-xs font-normal opacity-70">
+                  {resolvedTopic} · {difficulty} · up to {numQuestions}q
+                </span>
+              ) : useCustomQ ? (
                 <span className="text-xs font-normal opacity-70">
                   {parsedCustomQ.length} custom question{parsedCustomQ.length !== 1 ? "s" : ""}
                 </span>
