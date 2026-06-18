@@ -50,6 +50,7 @@ const _STORAGE_KEY = "jp_pilot_voice_enabled";
 const _CONTINUOUS_KEY = "jp_pilot_continuous_mode";
 const _BARGE_IN_KEY = "jp_pilot_barge_in";
 const _FAST_TTS_KEY = "jp_pilot_fast_browser_tts";
+const _WAKE_WORD_KEY = "jp_pilot_wake_word";
 const _AMPLITUDE_SMOOTH = 0.55; // weight of new sample (0–1); higher = snappier
 
 // Silence-based auto-stop tuning. The user shouldn't have to click again
@@ -175,6 +176,15 @@ export function useVoiceAgent() {
       return false;
     }
   });
+  const [wakeWordEnabled, setWakeWordEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const v = window.localStorage.getItem(_WAKE_WORD_KEY);
+      return v === null ? false : v === "1";
+    } catch {
+      return false;
+    }
+  });
   const [amplitude, setAmplitude] = useState(0);
   const [interimUserText, setInterimUserText] = useState<string | null>(null);
   const idRef = useRef(1);
@@ -254,6 +264,9 @@ export function useVoiceAgent() {
       localStorage.setItem(_FAST_TTS_KEY, fastBrowserTts ? "1" : "0");
     } catch {}
   }, [fastBrowserTts]);
+  useEffect(() => {
+    localStorage.setItem(_WAKE_WORD_KEY, wakeWordEnabled ? "1" : "0");
+  }, [wakeWordEnabled]);
 
   const _appendTurn = useCallback(
     (turn: Omit<AgentTurn, "id">): AgentTurn => {
@@ -919,5 +932,7 @@ export function useVoiceAgent() {
     setBargeInEnabled,
     fastBrowserTts,
     setFastBrowserTts,
+    wakeWordEnabled,
+    setWakeWordEnabled,
   };
 }

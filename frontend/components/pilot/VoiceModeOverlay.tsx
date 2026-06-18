@@ -192,6 +192,12 @@ const SettingsMenu = function SettingsMenu({
         disabled={savingBrief}
         onToggle={toggleBrief}
       />
+      <ToggleRow
+        label='Hey Jarvis wake word'
+        sub='Always listen for "Hey Jarvis" to activate'
+        on={agent.wakeWordEnabled}
+        onToggle={() => agent.setWakeWordEnabled(!agent.wakeWordEnabled)}
+      />
       <div className="my-1 border-t border-white/10" />
       <Link
         href="/pilot/history"

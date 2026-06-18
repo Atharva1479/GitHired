@@ -207,7 +207,7 @@ export function PilotOrb() {
   // Wake word detection: enabled only when voice mode is closed AND the user
   // hasn't turned it off in Settings. Falls back to enabled when settings
   // haven't loaded yet (undefined) so the feature is on by default.
-  const wakeWordEnabled = !voiceMode && (settings?.wake_word_enabled !== false);
+  const wakeWordEnabled = !voiceMode && agent.wakeWordEnabled;
   const { supported: wakeWordSupported } = useWakeWord({
     enabled: wakeWordEnabled,
     onTrigger: activateByWakeWord,
@@ -270,6 +270,13 @@ export function PilotOrb() {
             <span className="absolute -bottom-1 -right-1 grid place-items-center w-5 h-5 rounded-full bg-white text-indigo-700 text-[10.5px] font-bold ring-2 ring-white shadow">
               {level}
             </span>
+            {/* Wake-word listening indicator */}
+            {wakeWordEnabled && wakeWordSupported && (
+              <span
+                title='Listening for "Hey Jarvis"'
+                className="absolute -top-0.5 -left-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white animate-pulse"
+              />
+            )}
           </span>
         </button>
       </div>
