@@ -16,6 +16,7 @@ dependencies = [
     "langchain-google-genai>=4.2.0",
     "langchain-groq>=1.1.0",
     "langchain-core>=1.4.0",
+    "langchain-ollama>=0.3.0",
     "langsmith>=0.8.0",
     "apscheduler==3.10.4",
     "alembic==1.13.1",
