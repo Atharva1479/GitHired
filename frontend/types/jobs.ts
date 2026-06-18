@@ -19,6 +19,14 @@ export interface JobResult {
   est_applicants: string;
   velocity_label: string | null;
   bookmark_status: "bookmarked" | "applied" | "dismissed" | null;
+  // Phase 2 — enriched
+  is_remote: boolean;
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_currency: string | null;
+  tags: string[];
+  // Phase 3 — semantic ranking
+  semantic_score: number | null;
 }
 
 export interface JobSearch {
@@ -49,6 +57,7 @@ export interface SearchParams {
   remote_only?: boolean;
   experience?: string;
   employment_type?: string;  // client-side filter only
+  resume_id?: number;        // Option B: manual resume override (null = auto-detect)
 }
 
 export interface ApplyAndTrackResponse {

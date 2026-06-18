@@ -4,10 +4,19 @@ import { Search } from "lucide-react";
 
 import type { SearchParams } from "@/types/jobs";
 
+interface ResumeOption {
+  id: number;
+  name: string;
+  role_tag: string;
+}
+
 interface JobFiltersProps {
   onSearch: (params: SearchParams) => void;
   onFreshnessChange?: (hours: number) => void;
   isLoading: boolean;
+  resumes?: ResumeOption[];
+  selectedResumeId?: number | null;
+  onResumeChange?: (id: number | null) => void;
 }
 
 const EXP_OPTIONS = [
@@ -33,7 +42,14 @@ const JOB_TYPES = [
   { value: "intern",   label: "Internship" },
 ];
 
-export default function JobFilters({ onSearch, onFreshnessChange, isLoading }: JobFiltersProps) {
+export default function JobFilters({
+  onSearch,
+  onFreshnessChange,
+  isLoading,
+  resumes = [],
+  selectedResumeId = null,
+  onResumeChange,
+}: JobFiltersProps) {
   const [query, setQuery]         = useState("");
   const [location, setLocation]   = useState("");
   const [experience, setExp]      = useState("");
@@ -55,6 +71,7 @@ export default function JobFilters({ onSearch, onFreshnessChange, isLoading }: J
       experience: experience || undefined,
       remote_only: remoteOnly,
       employment_type: jobType || undefined,
+      resume_id: selectedResumeId ?? undefined,
     });
   }
 
@@ -79,6 +96,21 @@ export default function JobFilters({ onSearch, onFreshnessChange, isLoading }: J
           placeholder="Location"
           className="w-36 px-4 py-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-sm placeholder:text-[var(--color-text-3)] focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
+        {resumes.length > 0 && (
+          <select
+            value={selectedResumeId ?? ""}
+            onChange={(e) => onResumeChange?.(e.target.value ? Number(e.target.value) : null)}
+            className="w-44 shrink-0 px-3 py-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-text-2)] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            title="Resume used for job matching"
+          >
+            <option value="">Auto-detect resume</option>
+            {resumes.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name} ({r.role_tag})
+              </option>
+            ))}
+          </select>
+        )}
         <button
           type="submit"
           disabled={!query.trim() || isLoading}

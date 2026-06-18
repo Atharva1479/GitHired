@@ -1,12 +1,22 @@
 """Job search orchestrator.
 
-Queries JSearch + Adzuna in parallel, deduplicates, caches results in
-PostgreSQL, and enriches each job with freshness + competition scores.
+Queries all configured sources in parallel, deduplicates, caches results in
+PostgreSQL, re-ranks by semantic similarity to the user's best-matching resume,
+and returns the enriched list.
 
-Always fetches the last 3 days across two pages per API (3 concurrent
-requests: JSearch num_pages=2, Adzuna page 1, Adzuna page 2).
-Cache-first: skips API calls when >=15 unexpired FTS-matched rows exist.
-Freshness filtering is client-side — the full 3-day set is returned.
+Sources:
+  - JSearch (RapidAPI, paid key)      — 2 pages in one call
+  - Adzuna (free key)                 — 2 pages in parallel
+  - Arbeitnow (free, no auth)         — keyword search
+  - Remotive (free, no auth)          — keyword search
+  - Jobicy (free, no auth)            — tag search
+  - RemoteOK (free, no auth)          — tag search
+  - WeWorkRemotely (RSS, no auth)     — category feed + keyword filter
+  - Greenhouse / Lever / Ashby (ATS)  — company watchlist + keyword filter
+  - SmartRecruiters (free, no auth)   — verified company boards (freshworks, synechron)
+
+Cache-first: returns from job_cache when ≥15 unexpired FTS-matched rows exist.
+Freshness filtering is client-side — the full 3-day window is always returned.
 """
 from __future__ import annotations
 
@@ -19,13 +29,25 @@ import asyncpg
 import structlog
 
 from app.config import settings
-from app.services import adzuna_client, jsearch_client
+from app.services import (
+    adzuna_client,
+    arbeitnow_client,
+    ats_client,
+    jobicy_client,
+    jsearch_client,
+    remoteok_client,
+    remotive_client,
+    smartrecruiters_client,
+    weworkremotely_client,
+)
+from app.services.job_ranker import pick_resume, rank_jobs_by_resume
 
 log = structlog.get_logger("job_search")
 
 
+# ── Freshness helpers ──────────────────────────────────────────────────────────
+
 def _freshness(posted_at: datetime | None) -> dict[str, Any]:
-    """Compute competition metadata from posting time."""
     if posted_at is None:
         return {
             "hours_old": None,
@@ -61,19 +83,14 @@ def _freshness(posted_at: datetime | None) -> dict[str, Any]:
 
 
 def _velocity_label(hours_old: float | None, first_seen_at: datetime | None) -> str | None:
-    """Estimate how competition has grown since we first discovered this job.
-
-    Only meaningful when the job has been in our cache for 3+ hours.
-    """
     if hours_old is None or first_seen_at is None:
         return None
     if first_seen_at.tzinfo is None:
         first_seen_at = first_seen_at.replace(tzinfo=timezone.utc)
     cache_age_h = (datetime.now(tz=timezone.utc) - first_seen_at).total_seconds() / 3600
     if cache_age_h < 3:
-        return None  # Too fresh to measure meaningful change
+        return None
 
-    # Approx applicants when first seen vs now using the same tiers
     def _est(h: float) -> float:
         if h < 6:   return 20
         if h < 24:  return 90
@@ -82,9 +99,7 @@ def _velocity_label(hours_old: float | None, first_seen_at: datetime | None) -> 
         return 850
 
     hours_old_at_first_seen = max(0.0, hours_old - cache_age_h)
-    then_est = _est(hours_old_at_first_seen)
-    now_est  = _est(hours_old)
-    gain     = now_est - then_est
+    gain = _est(hours_old) - _est(hours_old_at_first_seen)
 
     if gain < 20:
         return "✓ Still early"
@@ -93,15 +108,9 @@ def _velocity_label(hours_old: float | None, first_seen_at: datetime | None) -> 
     return "↑↑ Getting competitive"
 
 
-def _cache_key(source: str, external_id: str) -> str:
-    return f"{source}:{external_id}"
+# ── DB helpers ─────────────────────────────────────────────────────────────────
 
-
-def _enrich_row(
-    row: asyncpg.Record,
-    bookmark_map: dict[str, str],
-) -> dict[str, Any]:
-    """Build result dict from a job_cache row + bookmark lookup."""
+def _enrich_row(row: asyncpg.Record, bookmark_map: dict[str, str]) -> dict[str, Any]:
     f = _freshness(row["posted_at"])
     bm_key = f"{row['source']}:{row['external_id']}"
     return {
@@ -116,47 +125,47 @@ def _enrich_row(
         "posted_at": row["posted_at"],
         "employment_type": row["employment_type"],
         "skills": list(row["skills"] or []),
+        "is_remote": bool(row.get("is_remote") or False),
+        "salary_min": row.get("salary_min"),
+        "salary_max": row.get("salary_max"),
+        "salary_currency": row.get("salary_currency"),
+        "tags": list(row.get("tags") or []),
         **f,
         "velocity_label": _velocity_label(f["hours_old"], row.get("first_seen_at")),
         "bookmark_status": bookmark_map.get(bm_key),
+        "semantic_score": None,
     }
 
 
-async def _build_bookmark_map(
-    conn: asyncpg.Connection,
-    user_id: int | None,
-) -> dict[str, str]:
+async def _build_bookmark_map(conn: asyncpg.Connection, user_id: int | None) -> dict[str, str]:
     if user_id is None:
         return {}
-    bm_rows = await conn.fetch(
+    rows = await conn.fetch(
         "SELECT source, external_id, status FROM job_bookmarks WHERE user_id = $1",
         user_id,
     )
-    return {f"{bm['source']}:{bm['external_id']}": bm["status"] for bm in bm_rows}
+    return {f"{r['source']}:{r['external_id']}": r["status"] for r in rows}
 
 
 async def _upsert_jobs(
     conn: asyncpg.Connection,
     jobs: list[dict[str, Any]],
 ) -> list[asyncpg.Record]:
-    """Upsert jobs into job_cache and return the full rows."""
     if not jobs:
         return []
-    ttl = timedelta(hours=settings.job_cache_ttl_hours)
     now = datetime.now(tz=timezone.utc)
-    expires_at = now + ttl
-
+    expires_at = now + timedelta(hours=settings.job_cache_ttl_hours)
     rows: list[asyncpg.Record] = []
     for j in jobs:
-        raw_json = json.dumps(j["raw_data"], default=str)
-        skills_arr = j.get("skills") or []
+        raw_json = json.dumps(j.get("raw_data") or {}, default=str)
         row = await conn.fetchrow(
             """
             INSERT INTO job_cache
               (source, external_id, title, company, location, description,
-               apply_url, posted_at, employment_type, skills, raw_data,
-               fetched_at, expires_at, first_seen_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14)
+               apply_url, posted_at, employment_type, skills,
+               is_remote, salary_min, salary_max, salary_currency, tags,
+               raw_data, fetched_at, expires_at, first_seen_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18,$19)
             ON CONFLICT (source, external_id) DO UPDATE SET
               title          = EXCLUDED.title,
               company        = EXCLUDED.company,
@@ -166,16 +175,24 @@ async def _upsert_jobs(
               posted_at      = EXCLUDED.posted_at,
               employment_type= EXCLUDED.employment_type,
               skills         = EXCLUDED.skills,
+              is_remote      = EXCLUDED.is_remote,
+              salary_min     = EXCLUDED.salary_min,
+              salary_max     = EXCLUDED.salary_max,
+              salary_currency= EXCLUDED.salary_currency,
+              tags           = EXCLUDED.tags,
               raw_data       = EXCLUDED.raw_data,
               fetched_at     = EXCLUDED.fetched_at,
               expires_at     = EXCLUDED.expires_at
-              -- first_seen_at intentionally NOT updated (preserves first discovery time)
             RETURNING *
             """,
             j["source"], j["external_id"], j["title"], j["company"],
-            j.get("location"), j.get("description"), j["apply_url"],
+            j.get("location"), j.get("description"), j.get("apply_url", ""),
             j.get("posted_at"), j.get("employment_type"),
-            skills_arr, raw_json, now, expires_at, now,
+            j.get("skills") or [],
+            bool(j.get("is_remote", False)),
+            j.get("salary_min"), j.get("salary_max"), j.get("salary_currency"),
+            j.get("tags") or [],
+            raw_json, now, expires_at, now,
         )
         if row:
             rows.append(row)
@@ -188,10 +205,6 @@ async def _query_cache(
     location: str | None,
     user_id: int | None,
 ) -> list[dict[str, Any]]:
-    """Return enriched jobs from job_cache using FTS — skips API calls on warm cache.
-
-    Returns up to 60 unexpired rows matching the query via PostgreSQL full-text search.
-    """
     rows = await conn.fetch(
         """
         SELECT *
@@ -215,6 +228,44 @@ async def _query_cache(
     return results
 
 
+# ── Result post-filters ───────────────────────────────────────────────────────
+
+_SENIOR_TERMS = {"senior", " lead ", "principal", "staff ", " sr.", "sr "}
+_JUNIOR_TERMS = {"junior", "entry level", "fresher", "trainee", "associate engineer"}
+
+
+def _apply_filters(
+    results: list[dict[str, Any]],
+    remote_only: bool,
+    location: str | None,
+    experience: str | None,
+) -> list[dict[str, Any]]:
+    if remote_only:
+        results = [r for r in results if r.get("is_remote")]
+
+    if location:
+        loc_lower = location.lower()
+        results = [
+            r for r in results
+            if r.get("is_remote") or loc_lower in (r.get("location") or "").lower()
+        ]
+
+    if experience == "entry":
+        results = [
+            r for r in results
+            if not any(t in (" " + (r.get("title") or "").lower() + " ") for t in _SENIOR_TERMS)
+        ]
+    elif experience == "senior":
+        results = [
+            r for r in results
+            if not any(t in (r.get("title") or "").lower() for t in _JUNIOR_TERMS)
+        ]
+
+    return results
+
+
+# ── Main search ────────────────────────────────────────────────────────────────
+
 async def search_jobs(
     conn: asyncpg.Connection,
     query: str,
@@ -222,22 +273,40 @@ async def search_jobs(
     remote_only: bool = False,
     experience: str | None = None,
     user_id: int | None = None,
+    resume_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Fetch jobs for last 3 days (2 pages per API), cache, and return sorted list.
+    """Fetch jobs from all sources, cache, semantic-rank, and return.
 
-    Cache-first: returns from job_cache when >=15 FTS-matched rows are unexpired.
-    Remote-only searches always hit the API (no is_remote column in cache).
-    No server-side freshness post-filter — the full 3-day set is returned so the
-    frontend can filter client-side without triggering a new request.
+    Cache-first: returns from job_cache when ≥15 unexpired FTS-matched rows exist.
+    Freshness filtering is client-side — the full 3-day window is returned.
+    Resume selection: auto-detect from query keywords (Option A) or explicit
+    resume_id override (Option B).
     """
     if not remote_only:
         cached = await _query_cache(conn, query, location, user_id)
         if len(cached) >= 15:
             log.info("job_search.cache_hit", query=query, total=len(cached))
+            cached = _apply_filters(cached, remote_only=False, location=location, experience=experience)
+            if user_id:
+                resume_text, resume_name = await pick_resume(conn, user_id, query, resume_id)
+                if resume_text:
+                    log.info("job_search.ranking_cache", resume=resume_name)
+                    cached = rank_jobs_by_resume(cached, resume_text)
             return cached
 
-    # Fetch 3-day window: JSearch (num_pages=2) + Adzuna pages 1 and 2 in parallel.
-    jsearch_raw, adzuna_p1, adzuna_p2 = await asyncio.gather(
+    # Parallel fetch across all sources
+    (
+        jsearch_raw,
+        adzuna_p1,
+        adzuna_p2,
+        arbeitnow_raw,
+        remotive_raw,
+        jobicy_raw,
+        remoteok_raw,
+        wwr_raw,
+        ats_raw,
+        sr_raw,
+    ) = await asyncio.gather(
         jsearch_client.search(
             query=query,
             location=location,
@@ -249,19 +318,31 @@ async def search_jobs(
         ),
         adzuna_client.search(query=query, location=location, max_days_old=3, page=1),
         adzuna_client.search(query=query, location=location, max_days_old=3, page=2),
+        arbeitnow_client.search(query),
+        remotive_client.search(query),
+        jobicy_client.search(query),
+        remoteok_client.search(query),
+        weworkremotely_client.search(query),
+        ats_client.search(query),
+        smartrecruiters_client.search(query),
         return_exceptions=True,
     )
 
     all_raw: list[dict[str, Any]] = []
-    for batch in (jsearch_raw, adzuna_p1, adzuna_p2):
+    for batch in (
+        jsearch_raw, adzuna_p1, adzuna_p2,
+        arbeitnow_raw, remotive_raw, jobicy_raw, remoteok_raw,
+        wwr_raw, ats_raw, sr_raw,
+    ):
         if isinstance(batch, list):
             all_raw.extend(batch)
 
+    # Dedup by (source, external_id)
     seen: set[str] = set()
     unique: list[dict[str, Any]] = []
     for j in all_raw:
-        key = _cache_key(j["source"], j["external_id"])
-        if key not in seen:
+        key = f"{j['source']}:{j['external_id']}"
+        if key not in seen and j.get("apply_url") and j.get("title"):
             seen.add(key)
             unique.append(j)
 
@@ -271,12 +352,27 @@ async def search_jobs(
     results = [_enrich_row(row, bookmark_map) for row in cached_rows]
     results.sort(key=lambda x: x["freshness_score"], reverse=True)
 
+    # Post-filters — applied before semantic re-rank so ranker sees clean data
+    results = _apply_filters(results, remote_only=remote_only, location=location, experience=experience)
+
+    # Semantic re-rank
+    if user_id:
+        resume_text, resume_name = await pick_resume(conn, user_id, query, resume_id)
+        if resume_text:
+            log.info("job_search.ranking", resume=resume_name, jobs=len(results))
+            results = rank_jobs_by_resume(results, resume_text)
+
     log.info(
         "job_search.completed",
-        query=query, total=len(results), raw=len(all_raw),
+        query=query,
+        total=len(results),
+        raw=len(all_raw),
+        unique=len(unique),
     )
     return results
 
+
+# ── Similar jobs ───────────────────────────────────────────────────────────────
 
 async def get_similar_jobs(
     conn: asyncpg.Connection,
@@ -284,7 +380,6 @@ async def get_similar_jobs(
     user_id: int | None = None,
     limit: int = 3,
 ) -> list[dict[str, Any]]:
-    """Find similar fresh jobs from the cache using full-text title matching."""
     source_row = await conn.fetchrow(
         "SELECT title, skills FROM job_cache WHERE id = $1", job_cache_id
     )

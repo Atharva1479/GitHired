@@ -9,14 +9,18 @@ import JobFilters from "@/components/jobs/JobFilters";
 import JobPreviewPanel from "@/components/jobs/JobPreviewPanel";
 import SavedSearchPanel from "@/components/jobs/SavedSearchPanel";
 import { useBookmarkJob, useJobSearch } from "@/hooks/useJobs";
+import { useResumes } from "@/hooks/useResumes";
 import type { JobResult, SearchParams } from "@/types/jobs";
 
 export default function JobsPage() {
-  const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
+  const [searchParams, setSearchParams]     = useState<SearchParams | null>(null);
   const [freshnessHours, setFreshnessHours] = useState(72);
+  const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
   const [applyJob, setApplyJob]             = useState<JobResult | null>(null);
   const [previewJob, setPreviewJob]         = useState<JobResult | null>(null);
   const [appliedCount, setAppliedCount]     = useState(0);
+
+  const { data: resumes = [] } = useResumes();
 
   const { data: allJobs, filteredData: jobs, isLoading, error } = useJobSearch(searchParams, freshnessHours);
   const { mutate: bookmarkJob } = useBookmarkJob();
@@ -58,7 +62,14 @@ export default function JobsPage() {
 
         {/* Search */}
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 mb-4">
-          <JobFilters onSearch={setSearchParams} onFreshnessChange={setFreshnessHours} isLoading={isLoading} />
+          <JobFilters
+            onSearch={setSearchParams}
+            onFreshnessChange={setFreshnessHours}
+            isLoading={isLoading}
+            resumes={resumes}
+            selectedResumeId={selectedResumeId}
+            onResumeChange={setSelectedResumeId}
+          />
         </div>
 
         {/* Saved searches */}

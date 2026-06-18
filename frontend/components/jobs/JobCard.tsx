@@ -21,13 +21,36 @@ const COLOR_MAP: Record<FreshnessColor, { bg: string; text: string; ring: string
   zinc:    { bg: "bg-zinc-500/10",    text: "text-zinc-500",    ring: "ring-zinc-500/20" },
 };
 
-function MatchChip({ jobId }: { jobId: number }) {
-  const { data, isLoading } = useMatchResume(jobId);
+function MatchChip({ job }: { job: JobResult }) {
+  const { data, isLoading } = useMatchResume(job.id);
+  // Prefer semantic_score from search ranking; fall back to ATS match endpoint
+  if (job.semantic_score !== null && job.semantic_score !== undefined) {
+    const s = job.semantic_score;
+    if (s < 40) return null;
+    const cls = s >= 75 ? "text-emerald-600" : s >= 55 ? "text-amber-600" : "text-orange-500";
+    return <span className={`text-xs font-semibold ${cls}`} title="Resume match score">✦ {Math.round(s)}%</span>;
+  }
   if (isLoading) return <span className="text-xs text-[var(--color-text-3)] animate-pulse">Scanning…</span>;
   if (!data || data.score === null) return null;
   const s = data.score;
   const cls = s >= 75 ? "text-emerald-600" : s >= 55 ? "text-amber-600" : "text-red-500";
   return <span className={`text-xs font-semibold ${cls}`}>{s}% match</span>;
+}
+
+function SalaryChip({ job }: { job: JobResult }) {
+  if (!job.salary_min && !job.salary_max) return null;
+  const fmt = (n: number) =>
+    job.salary_currency === "INR"
+      ? `₹${(n / 100000).toFixed(0)}L`
+      : `$${Math.round(n / 1000)}k`;
+  const label = job.salary_min && job.salary_max
+    ? `${fmt(job.salary_min)}–${fmt(job.salary_max)}`
+    : job.salary_min ? `${fmt(job.salary_min)}+` : `up to ${fmt(job.salary_max!)}`;
+  return (
+    <span className="text-xs font-medium text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full ring-1 ring-emerald-500/20">
+      {label}
+    </span>
+  );
 }
 
 function KeywordGap({ jobId }: { jobId: number }) {
@@ -96,7 +119,7 @@ export default function JobCard({ job, onApply, onBookmark, onPreview }: JobCard
                 ✓ Applied
               </span>
             )}
-            <MatchChip jobId={job.id} />
+            <MatchChip job={job} />
           </div>
           <h3 className="font-semibold text-[var(--color-text)] text-sm leading-snug line-clamp-2">{job.title}</h3>
           <p className="text-sm text-[var(--color-text-2)] mt-0.5">{job.company}</p>
@@ -123,7 +146,11 @@ export default function JobCard({ job, onApply, onBookmark, onPreview }: JobCard
             {job.employment_type.replace(/_/g, " ").toLowerCase()}
           </span>
         )}
+        {job.is_remote && !job.location?.toLowerCase().includes("remote") && (
+          <span className="px-2 py-0.5 rounded bg-sky-500/10 text-sky-600 ring-1 ring-sky-500/20">Remote</span>
+        )}
       </div>
+      <SalaryChip job={job} />
 
       {/* Competition bar */}
       <CompetitionBar score={job.freshness_score} />

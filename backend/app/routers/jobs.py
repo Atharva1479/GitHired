@@ -32,6 +32,7 @@ async def search_jobs(
     location: str | None = Query(default=None),
     remote_only: bool = Query(default=False),
     experience: str | None = Query(default=None),
+    resume_id: int | None = Query(default=None),
     conn: asyncpg.Connection = Depends(get_db),
     user_id: int = Depends(get_user_id),
 ) -> list[JobResult]:
@@ -42,6 +43,7 @@ async def search_jobs(
         remote_only=remote_only,
         experience=experience,
         user_id=user_id,
+        resume_id=resume_id,
     )
     return [JobResult(**r) for r in results]
 

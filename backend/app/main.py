@@ -1,4 +1,5 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 import structlog
@@ -53,6 +54,16 @@ async def lifespan(_: FastAPI):
         sentry=sentry_enabled,
         log_format=settings.log_format,
     )
+
+    # Wire LangSmith env vars — SDK reads os.environ directly, not Pydantic settings
+    if settings.langchain_tracing_v2:
+        _ls_key = settings.langsmith_api_key.get_secret_value()
+        if _ls_key:
+            os.environ["LANGSMITH_API_KEY"] = _ls_key
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
+            log.info("langsmith.enabled", project=settings.langsmith_project)
+
     await init_db()
     start_scheduler()
     # Fire the Ollama prewarm in the background so the first real user

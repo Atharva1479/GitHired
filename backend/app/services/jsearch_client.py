@@ -24,9 +24,9 @@ _HEADERS = {
 }
 
 _EXP_MAP = {
-    "entry": "ENTRY_LEVEL",
-    "mid": "MID_LEVEL",
-    "senior": "SENIOR_LEVEL",
+    "entry":  "under_3_years_experience",
+    "senior": "more_than_3_years_experience",
+    # "mid" has no JSearch equivalent — omit to avoid 400
 }
 
 
@@ -45,6 +45,9 @@ def _normalise(raw: dict[str, Any]) -> dict[str, Any]:
     if not skills:
         for qual in (raw.get("job_highlights") or {}).get("Qualifications") or []:
             skills.append(qual[:80])
+    salary_min = raw.get("job_min_salary") or raw.get("job_salary_standardized_min")
+    salary_max = raw.get("job_max_salary") or raw.get("job_salary_standardized_max")
+    salary_cur = raw.get("job_salary_currency") or raw.get("job_salary_standardized_currency")
     return {
         "source": "jsearch",
         "external_id": raw.get("job_id", ""),
@@ -55,6 +58,11 @@ def _normalise(raw: dict[str, Any]) -> dict[str, Any]:
         "apply_url": raw.get("job_apply_link") or raw.get("job_google_link", ""),
         "posted_at": _parse_dt(raw.get("job_posted_at_datetime_utc")),
         "employment_type": raw.get("job_employment_type"),
+        "is_remote": bool(raw.get("job_is_remote")),
+        "salary_min": int(salary_min) if salary_min else None,
+        "salary_max": int(salary_max) if salary_max else None,
+        "salary_currency": salary_cur,
+        "tags": [],
         "skills": skills[:20],
         "raw_data": raw,
     }

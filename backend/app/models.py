@@ -544,6 +544,14 @@ class JobResult(BaseModel):
     est_applicants: str
     velocity_label: str | None = None
     bookmark_status: str | None
+    # Phase 2 — enriched fields
+    is_remote: bool = False
+    salary_min: int | None = None
+    salary_max: int | None = None
+    salary_currency: str | None = None
+    tags: list[str] = []
+    # Phase 3 — semantic ranking
+    semantic_score: float | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -18,6 +18,7 @@ import logging
 from typing import Any
 
 import httpx
+from langsmith import traceable
 
 from app.config import settings
 
@@ -32,6 +33,7 @@ class OllamaUnavailable(Exception):
     """
 
 
+@traceable(name="ollama-chat", run_type="llm")
 async def chat(
     messages: list[dict[str, Any]],
     *,

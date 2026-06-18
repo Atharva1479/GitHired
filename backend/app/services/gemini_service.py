@@ -2,6 +2,7 @@ import asyncio
 
 import google.generativeai as genai
 import structlog
+from langsmith import traceable
 
 from app.config import settings
 from app.services import metrics
@@ -471,6 +472,7 @@ def _fallback(draft_type: str, **kw: object) -> str:
     return ""
 
 
+@traceable(name="gemini-generate", run_type="llm")
 async def generate(prompt: str, *, max_output_tokens: int = 400) -> tuple[str, int, int]:
     """Returns (text, prompt_tokens, output_tokens). Raises GeminiUnavailable."""
     try:

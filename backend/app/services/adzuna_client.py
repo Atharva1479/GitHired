@@ -29,16 +29,25 @@ def _parse_dt(value: str | None) -> datetime | None:
 
 
 def _normalise(raw: dict[str, Any]) -> dict[str, Any]:
+    title = raw.get("title", "")
+    location = (raw.get("location") or {}).get("display_name") or ""
+    salary_min = raw.get("salary_min")
+    salary_max = raw.get("salary_max")
     return {
         "source": "adzuna",
         "external_id": str(raw.get("id", "")),
-        "title": raw.get("title", ""),
+        "title": title,
         "company": (raw.get("company") or {}).get("display_name", "Unknown"),
-        "location": (raw.get("location") or {}).get("display_name"),
+        "location": location,
         "description": (raw.get("description") or "")[:2000],
         "apply_url": raw.get("redirect_url", ""),
         "posted_at": _parse_dt(raw.get("created")),
         "employment_type": raw.get("contract_type"),
+        "is_remote": "remote" in title.lower() or "remote" in location.lower(),
+        "salary_min": int(salary_min) if salary_min else None,
+        "salary_max": int(salary_max) if salary_max else None,
+        "salary_currency": "INR",
+        "tags": [],
         "skills": [],
         "raw_data": raw,
     }

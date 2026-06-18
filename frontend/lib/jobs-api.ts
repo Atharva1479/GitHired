@@ -27,6 +27,7 @@ export async function searchJobs(params: SearchParams): Promise<JobResult[]> {
   if (params.location)    qs.set("location", params.location);
   if (params.remote_only) qs.set("remote_only", "true");
   if (params.experience)  qs.set("experience", params.experience);
+  if (params.resume_id)   qs.set("resume_id", String(params.resume_id));
   const jobs: JobResult[] = await apiFetch(`/jobs/search?${qs.toString()}`);
   // Client-side employment type filter (data already in results)
   if (params.employment_type) {
