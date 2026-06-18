@@ -208,10 +208,11 @@ export function PilotOrb() {
   // hasn't turned it off in Settings. Falls back to enabled when settings
   // haven't loaded yet (undefined) so the feature is on by default.
   const wakeWordEnabled = !voiceMode && (settings?.wake_word_enabled !== false);
-  const { listening: wakeListening, micDenied } = useWakeWord(
-    activateByWakeWord,
-    wakeWordEnabled,
-  );
+  const { supported: wakeWordSupported } = useWakeWord({
+    enabled: wakeWordEnabled,
+    onTrigger: activateByWakeWord,
+    restartDelay: 2000,
+  });
 
   const level = state?.level ?? 1;
 
@@ -269,19 +270,6 @@ export function PilotOrb() {
             <span className="absolute -bottom-1 -right-1 grid place-items-center w-5 h-5 rounded-full bg-white text-indigo-700 text-[10.5px] font-bold ring-2 ring-white shadow">
               {level}
             </span>
-            {/* Wake-word listening indicator */}
-            {wakeListening && (
-              <span
-                title='Listening for "Hey Jarvis"'
-                className="absolute -top-0.5 -left-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white animate-pulse"
-              />
-            )}
-            {micDenied && (
-              <span
-                title="Mic permission denied — wake word disabled"
-                className="absolute -top-0.5 -left-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white"
-              />
-            )}
           </span>
         </button>
       </div>

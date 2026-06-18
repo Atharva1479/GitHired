@@ -1,23 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
-// Primary phrase + common phonetic misrecognitions Chrome STT returns for
-// "Jarvis" (a proper noun it doesn't always spell correctly).
-const WAKE_PHRASES = [
-  "jarvis",
-  "hey jarvis",
-  "ok jarvis",
-  "hi jarvis",
-  // Chrome STT phonetic misses for "Jarvis":
-  "garvis",
-  "harvis",
-  "jarvas",
-  "jarvice",
-  "harvest",   // rare but heard
-];
+export interface WakeWordOptions {
+  enabled: boolean;        // Toggle listening on/off
+  onTrigger: () => void;   // Called when wake word detected
+  restartDelay?: number;   // ms before re-arming after trigger (default 2000)
+}
 
-// Minimal inline types for the Web Speech API (not in standard TS dom lib).
+export interface WakeWordState {
+  supported: boolean;  // Whether browser supports Web Speech API
+}
+
+// Wake words to detect (case-insensitive)
+const WAKE_PHRASES = ["jarvis", "hey jarvis", "ok jarvis"];
+
+// Minimal inline types for the Web Speech API
 type SRResult = { transcript: string; confidence: number };
 type SRResultList = { length: number; isFinal: boolean } & ArrayLike<SRResult>;
 type SREvent = { resultIndex: number; results: ArrayLike<SRResultList> };
@@ -26,17 +24,16 @@ type SR = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
-  maxAlternatives: number;
-  onstart:  (() => void) | null;
+  onstart: (() => void) | null;
   onresult: ((e: SREvent) => void) | null;
-  onend:    (() => void) | null;
-  onerror:  ((e: SRErrorEvent) => void) | null;
-  start():  void;
-  abort():  void;
+  onend: (() => void) | null;
+  onerror: ((e: SRErrorEvent) => void) | null;
+  start(): void;
+  abort(): void;
 };
 type SRCtor = new () => SR;
 
-function getSR(): SRCtor | null {
+function getSRCtor(): SRCtor | null {
   if (typeof window === "undefined") return null;
   return (
     (window as unknown as { SpeechRecognition?: SRCtor }).SpeechRecognition ??
@@ -46,138 +43,188 @@ function getSR(): SRCtor | null {
   );
 }
 
-export type WakeWordState = {
-  /** True while SpeechRecognition is actively listening. */
-  listening: boolean;
-  /** Set when mic permission was denied — tells UI to show a hint. */
-  micDenied: boolean;
-};
+export function useWakeWord(opts: WakeWordOptions): WakeWordState {
+  const { enabled, onTrigger, restartDelay = 2000 } = opts;
 
-/**
- * Always-on background listener for "Jarvis" / "Hey Jarvis".
- * Calls `onWake` when detected. Pass `enabled={false}` to pause while
- * the voice overlay has the mic.
- *
- * Returns `{ listening, micDenied }` so the UI can show status.
- */
-export function useWakeWord(
-  onWake: () => void,
-  enabled: boolean,
-): WakeWordState {
-  const recognitionRef  = useRef<SR | null>(null);
-  const onWakeRef       = useRef(onWake);
-  onWakeRef.current     = onWake;
-  const enabledRef      = useRef(enabled);
-  enabledRef.current    = enabled;
+  const SRCtor = getSRCtor();
+  const supported = Boolean(SRCtor);
+
+  const recognitionRef = useRef<SR | null>(null);
+  const onTriggerRef = useRef(onTrigger);
+  const enabledRef = useRef(enabled);
   const restartTimerRef = useRef<number | null>(null);
-  const genRef          = useRef(0);
+  const triggeredRef = useRef(false);
 
-  const [listening,  setListening]  = useState(false);
-  const [micDenied,  setMicDenied]  = useState(false);
+  // Keep refs synchronized with latest prop values
+  useEffect(() => {
+    onTriggerRef.current = onTrigger;
+  }, [onTrigger]);
 
-  const stop = useCallback(() => {
-    genRef.current++;
-    setListening(false);
-    if (restartTimerRef.current !== null) {
-      clearTimeout(restartTimerRef.current);
-      restartTimerRef.current = null;
-    }
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
-      recognitionRef.current = null;
-    }
-  }, []);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
 
   const start = useCallback(() => {
-    const SR = getSR();
-    if (!SR || !enabledRef.current) return;
+    if (!SRCtor || !enabledRef.current) return;
 
+    // Clean up any pending restart
     if (restartTimerRef.current !== null) {
       clearTimeout(restartTimerRef.current);
       restartTimerRef.current = null;
     }
+
+    // Clean up old recognition instance
     if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
+      try {
+        recognitionRef.current.abort();
+      } catch {
+        // ignore
+      }
       recognitionRef.current = null;
     }
 
-    const gen = ++genRef.current;
-
-    const scheduleRestart = (delayMs: number) => {
-      setListening(false);
-      if (genRef.current !== gen || !enabledRef.current) return;
-      restartTimerRef.current = window.setTimeout(() => {
-        restartTimerRef.current = null;
-        if (enabledRef.current && genRef.current === gen) start();
-      }, delayMs);
-    };
-
-    const recognition = new SR();
-    recognition.continuous      = true;
-    recognition.interimResults  = true;
-    recognition.lang            = "en-US";
-    recognition.maxAlternatives = 5;
-
-    recognition.onstart = () => {
-      if (genRef.current !== gen) return;
-      setListening(true);
-      setMicDenied(false);
-    };
+    const recognition = new SRCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
 
     recognition.onresult = (event: SREvent) => {
-      if (!enabledRef.current || genRef.current !== gen) return;
+      if (!enabledRef.current || triggeredRef.current) return;
+
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const res = event.results[i];
-        for (let j = 0; j < res.length; j++) {
-          const t = res[j].transcript.trim().toLowerCase();
-          if (WAKE_PHRASES.some((p) => t.includes(p))) {
-            onWakeRef.current();
+        const resultList = event.results[i];
+        for (let j = 0; j < resultList.length; j++) {
+          const transcript = resultList[j].transcript
+            .trim()
+            .toLowerCase();
+
+          // Check if any wake phrase matches
+          if (
+            WAKE_PHRASES.some((phrase) =>
+              transcript.includes(phrase)
+            )
+          ) {
+            // Trigger callback
+            triggeredRef.current = true;
+            onTriggerRef.current();
+
+            // Stop recognition and restart after delay
+            if (recognitionRef.current) {
+              try {
+                recognitionRef.current.abort();
+              } catch {
+                // ignore
+              }
+              recognitionRef.current = null;
+            }
+
+            // Re-arm after restartDelay
+            restartTimerRef.current = window.setTimeout(() => {
+              restartTimerRef.current = null;
+              triggeredRef.current = false;
+              if (enabledRef.current) {
+                start();
+              }
+            }, restartDelay);
+
             return;
           }
         }
       }
     };
 
-    recognition.onend = () => {
-      if (genRef.current !== gen) return;
+    recognition.onerror = (event: SRErrorEvent) => {
       recognitionRef.current = null;
+
       if (!enabledRef.current) return;
-      scheduleRestart(300);
+
+      // Auto-restart on certain errors with 500ms delay
+      if (
+        event.error === "no-speech" ||
+        event.error === "aborted" ||
+        event.error === "audio-capture"
+      ) {
+        if (restartTimerRef.current !== null) {
+          clearTimeout(restartTimerRef.current);
+        }
+        restartTimerRef.current = window.setTimeout(() => {
+          restartTimerRef.current = null;
+          if (enabledRef.current) {
+            start();
+          }
+        }, 500);
+      }
     };
 
-    recognition.onerror = (event: SRErrorEvent) => {
-      if (genRef.current !== gen || event.error === "aborted") return;
+    recognition.onend = () => {
       recognitionRef.current = null;
+
       if (!enabledRef.current) return;
 
-      if (event.error === "not-allowed") {
-        setMicDenied(true);
-        setListening(false);
-        return; // don't retry — user needs to grant permission
+      // Auto-restart after browser stops recognition (200ms delay)
+      if (restartTimerRef.current !== null) {
+        clearTimeout(restartTimerRef.current);
       }
-      scheduleRestart(event.error === "no-speech" ? 300 : 3000);
+      restartTimerRef.current = window.setTimeout(() => {
+        restartTimerRef.current = null;
+        if (enabledRef.current) {
+          start();
+        }
+      }, 200);
     };
 
     try {
       recognition.start();
       recognitionRef.current = recognition;
     } catch {
-      recognitionRef.current = null;
-      scheduleRestart(1000);
+      // If start() throws, restart after 500ms
+      if (restartTimerRef.current !== null) {
+        clearTimeout(restartTimerRef.current);
+      }
+      restartTimerRef.current = window.setTimeout(() => {
+        restartTimerRef.current = null;
+        if (enabledRef.current) {
+          start();
+        }
+      }, 500);
     }
-  }, []); // all deps via refs
+  }, [SRCtor, restartDelay]);
 
   useEffect(() => {
     if (enabled) {
-      const initTimer = window.setTimeout(start, 500);
-      return () => {
-        clearTimeout(initTimer);
-        stop();
-      };
+      start();
     } else {
-      stop();
+      // Stop recognition when disabled
+      if (restartTimerRef.current !== null) {
+        clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {
+          // ignore
+        }
+        recognitionRef.current = null;
+      }
     }
-  }, [enabled, start, stop]);
 
-  return { listening, micDenied };
+    return () => {
+      // Cleanup on unmount
+      if (restartTimerRef.current !== null) {
+        clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {
+          // ignore
+        }
+        recognitionRef.current = null;
+      }
+    };
+  }, [enabled, start]);
+
+  return { supported };
 }
