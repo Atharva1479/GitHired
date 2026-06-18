@@ -201,3 +201,54 @@ class TestRunTurnContract:
             await pilot_graph.run_turn(conn=conn, user_id=1, message="hello")
 
         audit_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_safety_preamble_injected_into_system_prompt(self) -> None:
+        """When safety check triggers, the preamble is prepended to the system prompt."""
+        from langchain_core.messages import AIMessage, SystemMessage as SM
+
+        from app.services import pilot_graph
+        from app.services.pilot_safety import SafetyDecision
+
+        conn = MagicMock()
+        captured_messages: list = []
+
+        async def _capture_messages(state: dict, config: Any = None) -> dict:
+            captured_messages.extend(state.get("messages", []))
+            return {"messages": [AIMessage(content="Stay safe.")]}
+
+        fake_safety = SafetyDecision(triggered=True, matched_pattern="test")
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_capture_messages)
+
+        with (
+            patch(
+                "app.services.pilot_graph._safety_check",
+                return_value=fake_safety,
+            ),
+            patch(
+                "app.services.pilot_graph._build_system_prompt",
+                new=AsyncMock(return_value="You are Pilot."),
+            ),
+            patch(
+                "app.services.pilot_graph._make_agent",
+                return_value=mock_agent,
+            ),
+            patch(
+                "app.services.pilot_graph._audit_log",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.services.pilot_graph.adapt_tools",
+                return_value=[],
+            ),
+        ):
+            result = await pilot_graph.run_turn(
+                conn=conn, user_id=1, message="I want to hurt myself"
+            )
+
+        # System message should contain the safety preamble
+        system_msgs = [m for m in captured_messages if isinstance(m, SM)]
+        assert len(system_msgs) == 1
+        preamble = fake_safety.preamble()
+        assert preamble in system_msgs[0].content

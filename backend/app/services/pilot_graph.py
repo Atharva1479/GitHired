@@ -182,7 +182,7 @@ def _extract_reply(state: dict[str, Any]) -> str:
 
 
 def _extract_tokens(state: dict[str, Any]) -> tuple[int, int]:
-    """Sum input/output tokens from all AIMessages in state['messages']."""
+    """Sum input/output tokens across all AIMessages — captures total cost per turn."""
     tokens_in = 0
     tokens_out = 0
     for msg in state.get("messages") or []:
@@ -342,8 +342,6 @@ async def run_turn(
             return result
 
         result.reply = reply
-        if result.outcome == "":
-            result.outcome = "ok"
 
         tokens_in, tokens_out = _extract_tokens(state)
         result.tokens_in = tokens_in
