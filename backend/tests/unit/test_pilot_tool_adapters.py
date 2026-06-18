@@ -114,6 +114,34 @@ class TestAdaptTools:
             new=AsyncMock(return_value=mock_result),
         ) as mock_dispatch:
             await list_app_tool.ainvoke({"status": "applied"})
-            mock_dispatch.assert_called_once_with(
-                "list_applications", {"status": "applied"}, ctx
-            )
+            # Verify dispatch was called with correct tool name and includes
+            # the provided status field (Pydantic fills other optional fields
+            # as None).
+            assert mock_dispatch.call_count == 1
+            call_args = mock_dispatch.call_args[0]
+            assert call_args[0] == "list_applications"
+            assert call_args[1]["status"] == "applied"
+            assert call_args[2] == ctx
+
+    @pytest.mark.asyncio
+    async def test_none_valued_optional_field_forwarded_to_dispatch(self) -> None:
+        """Pydantic None defaults for optional fields must reach dispatch."""
+        ctx = _make_ctx()
+
+        captured_args: dict[str, Any] = {}
+
+        async def _capture(name: str, args: dict[str, Any], ctx: Any) -> dict[str, Any]:
+            captured_args.update(args)
+            return {}
+
+        with patch(
+            "app.services.pilot_tool_adapters.dispatch", side_effect=_capture
+        ):
+            tools = adapt_tools(ctx)
+            list_apps = next(t for t in tools if t.name == "list_applications")
+            # Invoke without "status" — Pydantic fills it as None
+            await list_apps.ainvoke({})
+
+        # After the fix: "status" key is present (as None) in dispatch kwargs
+        assert "status" in captured_args
+        assert captured_args["status"] is None

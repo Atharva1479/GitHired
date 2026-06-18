@@ -79,10 +79,7 @@ def adapt_tools(ctx: ToolContext) -> list[StructuredTool]:
         async def _coroutine(
             _tool_name: str = tool.name, **kwargs: Any
         ) -> str:
-            # Strip None values so optional fields absent in the LLM's call
-            # are not forwarded to dispatch (mirrors the original tool contract).
-            clean_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-            result = await dispatch(_tool_name, clean_kwargs, ctx)
+            result = await dispatch(_tool_name, kwargs, ctx)
             return json.dumps(result, default=str)
 
         structured = StructuredTool.from_function(
