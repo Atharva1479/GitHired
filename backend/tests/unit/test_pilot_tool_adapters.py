@@ -101,6 +101,7 @@ class TestAdaptTools:
         pilot_names = {t.name for t in TOOLS}
         assert adapted_names == pilot_names
 
+    @pytest.mark.asyncio
     async def test_tool_delegates_to_dispatch(self) -> None:
         ctx = _make_ctx()
         tools = adapt_tools(ctx)

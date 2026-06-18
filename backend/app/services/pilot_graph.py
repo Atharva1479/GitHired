@@ -20,6 +20,7 @@ from typing import Any
 import asyncpg
 import structlog
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langgraph.errors import GraphRecursionError
 from langgraph.prebuilt import create_react_agent
 
 from app.config import settings
@@ -306,6 +307,13 @@ async def run_turn(
             result.reply = _TIMEOUT_REPLY
             result.outcome = "timeout"
             return result
+        except GraphRecursionError:
+            log.warning("pilot.graph.max_steps user_id=%s", user_id)
+            result.reply = (
+                "I hit my step limit on that one. Could you break the request into smaller parts?"
+            )
+            result.outcome = "max_steps"
+            return result
         except GeminiUnavailable:
             if provider != "auto":
                 result.reply = _ERROR_REPLY
@@ -325,6 +333,13 @@ async def run_turn(
                 result.reply = _TIMEOUT_REPLY
                 result.outcome = "timeout"
                 return result
+            except GraphRecursionError:
+                log.warning("pilot.graph.max_steps user_id=%s", user_id)
+                result.reply = (
+                    "I hit my step limit on that one. Could you break the request into smaller parts?"
+                )
+                result.outcome = "max_steps"
+                return result
             except OllamaUnavailable:
                 result.reply = _ERROR_REPLY
                 result.outcome = "error"
@@ -333,6 +348,48 @@ async def run_turn(
             result.reply = _ERROR_REPLY
             result.outcome = "error"
             return result
+        except Exception as _llm_exc:
+            # Catch LangChain/Google API errors that aren't GeminiUnavailable.
+            # On "auto", treat as Gemini unavailable and try Ollama.
+            if provider == "auto":
+                log.warning(
+                    "pilot.graph.gemini_error_fallback user_id=%s error=%s",
+                    user_id,
+                    _llm_exc,
+                )
+                ollama_llm = _make_ollama()
+                ollama_agent = _make_agent(tools, ollama_llm)
+                try:
+                    state = await asyncio.wait_for(
+                        _invoke_agent(ollama_agent, messages),
+                        timeout=WALL_BUDGET_SECONDS,
+                    )
+                    result.outcome = "ok_ollama"
+                except asyncio.TimeoutError:
+                    result.reply = _TIMEOUT_REPLY
+                    result.outcome = "timeout"
+                    return result
+                except GraphRecursionError:
+                    log.warning("pilot.graph.max_steps user_id=%s", user_id)
+                    result.reply = (
+                        "I hit my step limit on that one. Could you break the request into smaller parts?"
+                    )
+                    result.outcome = "max_steps"
+                    return result
+                except OllamaUnavailable:
+                    result.reply = _ERROR_REPLY
+                    result.outcome = "error"
+                    return result
+            else:
+                log.error(
+                    "pilot.graph.llm_error user_id=%s provider=%s error=%s",
+                    user_id,
+                    provider,
+                    _llm_exc,
+                )
+                result.reply = _ERROR_REPLY
+                result.outcome = "error"
+                return result
 
         # Extract results from LangGraph state
         reply = _extract_reply(state)
