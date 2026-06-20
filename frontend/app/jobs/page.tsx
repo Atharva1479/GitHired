@@ -65,6 +65,14 @@ export default function JobsPage() {
   const [previewJob, setPreviewJob]         = useState<JobResult | null>(null);
   const [appliedCount, setAppliedCount]     = useState(0);
 
+  const PAGE_SIZE = 24;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Reset pagination when search changes
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchParams]);
+
   useEffect(() => {
     if (!searchParams) return;
     try {
@@ -76,6 +84,9 @@ export default function JobsPage() {
 
   const { data: allJobs, filteredData: jobs, isLoading, error } = useJobSearch(searchParams, freshnessHours);
   const { mutate: bookmarkJob } = useBookmarkJob();
+
+  const visibleJobs = jobs.slice(0, visibleCount);
+  const hasMore = jobs.length > visibleCount;
 
   function handleApply(job: JobResult) {
     setPreviewJob(null);
@@ -171,7 +182,10 @@ export default function JobsPage() {
           <>
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-[var(--color-text-3)]">
-                <span className="font-semibold text-[var(--color-text)]">{jobs.length}</span>
+                <span className="font-semibold text-[var(--color-text)]">{visibleJobs.length}</span>
+                {jobs.length > visibleJobs.length && (
+                  <span className="text-[var(--color-text-3)]"> of {jobs.length}</span>
+                )}
                 {allJobs && allJobs.length > jobs.length && (
                   <span> / {allJobs.length}</span>
                 )}
@@ -182,7 +196,7 @@ export default function JobsPage() {
               )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {jobs.map((job) => (
+              {visibleJobs.map((job) => (
                 <JobCard
                   key={`${job.source}-${job.external_id}`}
                   job={job}
@@ -192,6 +206,16 @@ export default function JobsPage() {
                 />
               ))}
             </div>
+            {hasMore && (
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                  className="px-6 py-2.5 rounded-xl border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-2)] hover:border-indigo-400 hover:text-indigo-500 transition-colors"
+                >
+                  Load more ({jobs.length - visibleCount} remaining)
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
