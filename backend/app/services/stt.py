@@ -26,6 +26,7 @@ async def transcribe(audio: bytes, *, filename: str = "speech.webm") -> str:
         "model": settings.groq_stt_model,
         "response_format": "json",
         "temperature": "0",
+        "language": "en",
     }
     headers = {"Authorization": f"Bearer {key}"}
 
