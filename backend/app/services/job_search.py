@@ -1,22 +1,19 @@
-"""Job search orchestrator.
+"""Job search orchestrator — Fan-Out + Scatter-Gather with tiered sources.
 
-Queries all configured sources in parallel, deduplicates, caches results in
-PostgreSQL, re-ranks by semantic similarity to the user's best-matching resume,
-and returns the enriched list.
+Architecture:
+  - Tier 1 (paid/reliable): JSearch, Adzuna ×2 — timeout 6 s
+  - Tier 2 (free/supplementary): Arbeitnow, ATS, SmartRecruiters, Jooble, SerpAPI — timeout 10 s
+  - Remote-only boards added to Tier 2 when remote_only=True
 
-Sources:
-  - JSearch (RapidAPI, paid key)      — 2 pages in one call
-  - Adzuna (free key)                 — 2 pages in parallel
-  - Arbeitnow (free, no auth)         — keyword search
-  - Remotive (free, no auth)          — keyword search
-  - Jobicy (free, no auth)            — tag search
-  - RemoteOK (free, no auth)          — tag search
-  - WeWorkRemotely (RSS, no auth)     — category feed + keyword filter
-  - Greenhouse / Lever / Ashby (ATS)  — company watchlist + keyword filter
-  - SmartRecruiters (free, no auth)   — verified company boards (freshworks, synechron)
-
-Two-tier cache: exact-key cache (MD5 hash → job_search_cache) checked first, then FTS fallback (≥15 hits), then live API fetch.
-Freshness filtering is client-side — the full 3-day window is always returned.
+Request flow:
+  1. Exact-key cache hit (<5 ms) — serve immediately; trigger background
+     refresh if age > 3 h (Stale-While-Revalidate).
+  2. FTS warm-cache hit (≥15 rows) — serve from job_cache.
+  3. Live fetch — fire Tier 1 + Tier 2 simultaneously as asyncio Tasks.
+       • If Tier 1 returns ≥ MIN_EARLY_RETURN jobs within 6 s → return early,
+         let Tier 2 finish in background and update cache.
+       • Otherwise wait for Tier 2 (total budget 12 s), return combined results.
+  4. All source calls are wrapped with per-source timeout + circuit breaker.
 """
 from __future__ import annotations
 
@@ -43,9 +40,18 @@ from app.services import (
     smartrecruiters_client,
     weworkremotely_client,
 )
+from app.services.circuit_breaker import get_breaker
 from app.services.job_ranker import pick_resume, rank_jobs_by_resume
 
 log = structlog.get_logger("job_search")
+
+# ── Timing constants ───────────────────────────────────────────────────────────
+_T1 = 6.0    # Tier-1 source timeout (paid APIs — reliable, fast)
+_T2 = 10.0   # Tier-2 source timeout (free APIs — slower, less reliable)
+TIER1_DEADLINE = 6.0   # wait this long for Tier-1 results
+TIER2_BUDGET   = 12.0  # absolute max response time (Tier-1 + remaining)
+MIN_EARLY_RETURN = 10  # return Tier-1 results early if we get at least this many
+REVALIDATE_AFTER_SECONDS = 10_800  # 3 h = 75 % of 4 h TTL → trigger background refresh
 
 
 # ── Freshness helpers ──────────────────────────────────────────────────────────
@@ -104,10 +110,8 @@ def _velocity_label(hours_old: float | None, first_seen_at: datetime | None) -> 
     hours_old_at_first_seen = max(0.0, hours_old - cache_age_h)
     gain = _est(hours_old) - _est(hours_old_at_first_seen)
 
-    if gain < 20:
-        return "✓ Still early"
-    if gain < 100:
-        return "↑ Rising"
+    if gain < 20:   return "✓ Still early"
+    if gain < 100:  return "↑ Rising"
     return "↑↑ Getting competitive"
 
 
@@ -231,7 +235,7 @@ async def _query_cache(
     return results
 
 
-# ── Result post-filters ───────────────────────────────────────────────────────
+# ── Result helpers ─────────────────────────────────────────────────────────────
 
 _SENIOR_TERMS = {"senior", " lead ", "principal", "staff ", " sr.", "sr "}
 _JUNIOR_TERMS = {"junior", "entry level", "fresher", "trainee", "associate engineer"}
@@ -245,14 +249,12 @@ def _apply_filters(
 ) -> list[dict[str, Any]]:
     if remote_only:
         results = [r for r in results if r.get("is_remote")]
-
     if location:
         loc_lower = location.lower()
         results = [
             r for r in results
             if r.get("is_remote") or loc_lower in (r.get("location") or "").lower()
         ]
-
     if experience == "entry":
         results = [
             r for r in results
@@ -263,14 +265,23 @@ def _apply_filters(
             r for r in results
             if not any(t in (r.get("title") or "").lower() for t in _JUNIOR_TERMS)
         ]
-
     return results
+
+
+def _dedup(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for j in raw:
+        k = f"{j['source']}:{j['external_id']}"
+        if k not in seen and j.get("apply_url") and j.get("title"):
+            seen.add(k)
+            unique.append(j)
+    return unique
 
 
 # ── Exact-key query result cache ──────────────────────────────────────────────
 
 def _cache_key(query: str, location: str | None, remote_only: bool, experience: str | None) -> str:
-    """MD5 of normalised search parameters — used as the exact cache lookup key."""
     raw = f"{query.lower().strip()}|{(location or '').lower().strip()}|{remote_only}|{experience or ''}"
     return hashlib.md5(raw.encode()).hexdigest()
 
@@ -282,28 +293,27 @@ async def _read_search_cache(
     remote_only: bool,
     experience: str | None,
     user_id: int | None,
-) -> list[dict[str, Any]] | None:
-    """Return cached job list if a valid (unexpired) entry exists, else None."""
+) -> tuple[list[dict[str, Any]], datetime] | None:
+    """Return (jobs, created_at) if a valid unexpired cache entry exists, else None."""
     key = _cache_key(query, location, remote_only, experience)
     row = await conn.fetchrow(
-        "SELECT job_ids FROM job_search_cache WHERE query_hash=$1 AND expires_at > now()",
+        "SELECT job_ids, created_at FROM job_search_cache WHERE query_hash=$1 AND expires_at > now()",
         key,
     )
     if not row or not row["job_ids"]:
         return None
     job_ids: list[int] = list(row["job_ids"])
-    # Fetch from job_cache in the cached order (preserve freshness sort)
     rows = await conn.fetch(
         "SELECT * FROM job_cache WHERE id = ANY($1::int[]) AND expires_at > now()",
         job_ids,
     )
     if not rows:
         return None
-    # Re-sort to match the original cached order
     rows_by_id = {r["id"]: r for r in rows}
     ordered = [rows_by_id[jid] for jid in job_ids if jid in rows_by_id]
     bookmark_map = await _build_bookmark_map(conn, user_id)
-    return [_enrich_row(r, bookmark_map) for r in ordered]
+    jobs = [_enrich_row(r, bookmark_map) for r in ordered]
+    return jobs, row["created_at"]
 
 
 async def _write_search_cache(
@@ -314,7 +324,6 @@ async def _write_search_cache(
     experience: str | None,
     results: list[dict[str, Any]],
 ) -> None:
-    """Upsert the result set's job IDs into job_search_cache with 4h TTL."""
     key = _cache_key(query, location, remote_only, experience)
     job_ids = [r["id"] for r in results if r.get("id")]
     expires_at = datetime.now(tz=timezone.utc) + timedelta(hours=settings.job_cache_ttl_hours)
@@ -337,6 +346,148 @@ async def _write_search_cache(
     )
 
 
+# ── Source task builder ────────────────────────────────────────────────────────
+
+def _build_source_tasks(
+    query: str,
+    location: str | None,
+    remote_only: bool,
+    experience: str | None,
+) -> tuple[list[tuple[str, Any, float]], list[tuple[str, Any, float]]]:
+    """Return (tier1, tier2) lists of (source_name, coroutine, timeout_seconds).
+
+    Tier 1 — paid/reliable: JSearch + Adzuna (2 pages). Fast, high quality.
+    Tier 2 — free/supplementary: Arbeitnow, ATS, Jooble, SerpAPI, etc.
+    """
+    tier1: list[tuple[str, Any, float]] = [
+        ("jsearch",   jsearch_client.search(
+            query=query, location=location, remote_only=remote_only,
+            experience=experience, date_posted="3days", page=1, num_pages=2,
+        ), _T1),
+        ("adzuna_p1", adzuna_client.search(query=query, location=location, max_days_old=3, page=1), _T1),
+        ("adzuna_p2", adzuna_client.search(query=query, location=location, max_days_old=3, page=2), _T1),
+    ]
+    tier2: list[tuple[str, Any, float]] = [
+        ("arbeitnow",       arbeitnow_client.search(query), _T2),
+        ("ats",             ats_client.search(query), _T2),
+        ("smartrecruiters", smartrecruiters_client.search(query), _T2),
+        ("jooble",          jooble_client.search(query, location), _T2),
+        ("serpapi",         serpapi_client.search(query, location), _T2),
+    ]
+    if remote_only:
+        tier2 += [
+            ("remotive",       remotive_client.search(query), _T2),
+            ("jobicy",         jobicy_client.search(query), _T2),
+            ("remoteok",       remoteok_client.search(query), _T2),
+            ("weworkremotely", weworkremotely_client.search(query), _T2),
+        ]
+    return tier1, tier2
+
+
+def _collect_done(futures: set[asyncio.Task]) -> list[dict[str, Any]]:
+    """Extract flat job list from a set of completed asyncio Tasks."""
+    jobs: list[dict[str, Any]] = []
+    for fut in futures:
+        if fut.cancelled():
+            continue
+        try:
+            result = fut.result()
+            if isinstance(result, list):
+                jobs.extend(result)
+        except Exception:
+            pass
+    return jobs
+
+
+async def _process_and_cache(
+    conn: asyncpg.Connection,
+    raw_jobs: list[dict[str, Any]],
+    query: str,
+    location: str | None,
+    remote_only: bool,
+    experience: str | None,
+    user_id: int | None,
+) -> list[dict[str, Any]]:
+    """Dedup → upsert → enrich → sort → filter → write cache. Returns final list."""
+    unique = _dedup(raw_jobs)
+    if not unique:
+        return []
+    rows = await _upsert_jobs(conn, unique)
+    bookmark_map = await _build_bookmark_map(conn, user_id)
+    results = [_enrich_row(r, bookmark_map) for r in rows]
+    results.sort(key=lambda x: x["freshness_score"], reverse=True)
+    results = _apply_filters(results, remote_only=remote_only, location=location, experience=experience)
+    await _write_search_cache(conn, query, location, remote_only, experience, results)
+    return results
+
+
+# ── Background helpers (own DB connection) ─────────────────────────────────────
+
+async def _finalize_tier2(
+    tier2_tasks: list[asyncio.Task],
+    existing_results: list[dict[str, Any]],
+    query: str,
+    location: str | None,
+    remote_only: bool,
+    experience: str | None,
+    user_id: int | None,
+) -> None:
+    """Background: wait for Tier-2 tasks, merge with early-return results, update cache."""
+    from app.database import pool as get_pool  # late import — avoids circular at module load
+    try:
+        done, pending = await asyncio.wait(tier2_tasks, timeout=_T2)
+        for fut in pending:
+            fut.cancel()
+        tier2_jobs = _collect_done(done)
+        if not tier2_jobs:
+            return
+
+        existing_keys = {f"{r['source']}:{r['external_id']}" for r in existing_results}
+        new_jobs = [j for j in tier2_jobs if f"{j['source']}:{j['external_id']}" not in existing_keys]
+        if not new_jobs:
+            return
+
+        async with get_pool().acquire() as conn:
+            rows = await _upsert_jobs(conn, _dedup(new_jobs))
+            bookmark_map = await _build_bookmark_map(conn, user_id)
+            combined = existing_results + [_enrich_row(r, bookmark_map) for r in rows]
+            combined.sort(key=lambda x: x["freshness_score"], reverse=True)
+            combined = _apply_filters(combined, remote_only=remote_only, location=location, experience=experience)
+            await _write_search_cache(conn, query, location, remote_only, experience, combined)
+            log.info("job_search.tier2_finalized", query=query, new_jobs=len(new_jobs), total=len(combined))
+
+    except Exception as exc:
+        log.warning("job_search.tier2_finalize_error", query=query, error=str(exc))
+
+
+async def _background_refresh(
+    query: str,
+    location: str | None,
+    remote_only: bool,
+    experience: str | None,
+    user_id: int | None,
+) -> None:
+    """Stale-While-Revalidate: full live fetch in background after serving a stale cache hit."""
+    from app.database import pool as get_pool
+    try:
+        tier1, tier2 = _build_source_tasks(query, location, remote_only, experience)
+        all_source_tasks = [
+            asyncio.create_task(get_breaker(name).call(coro, timeout))
+            for name, coro, timeout in tier1 + tier2
+        ]
+        done, pending = await asyncio.wait(all_source_tasks, timeout=TIER2_BUDGET)
+        for fut in pending:
+            fut.cancel()
+        raw_jobs = _collect_done(done)
+        if not raw_jobs:
+            return
+        async with get_pool().acquire() as conn:
+            await _process_and_cache(conn, raw_jobs, query, location, remote_only, experience, user_id)
+            log.info("job_search.swr_refresh_done", query=query, total=len(raw_jobs))
+    except Exception as exc:
+        log.warning("job_search.swr_refresh_error", query=query, error=str(exc))
+
+
 # ── Main search ────────────────────────────────────────────────────────────────
 
 async def search_jobs(
@@ -347,18 +498,33 @@ async def search_jobs(
     experience: str | None = None,
     user_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Fetch jobs from all sources, cache, and return sorted by freshness.
+    """Tiered fan-out job search with circuit breaker, per-source timeouts, and SWR cache.
 
-    Exact-key cache: hashes (query, location, remote_only, experience) → job_ids[] with 4h TTL.
-    Repeat searches return in <5ms. Remote-only boards skipped for location searches.
+    Response time targets:
+      - Cache hit (fresh):  <10 ms
+      - Cache hit (stale):  <10 ms  + background refresh
+      - Tier-1 early return: ~6 s   (≥10 jobs from JSearch/Adzuna)
+      - Full fetch:         ≤12 s   (Tier-1 + Tier-2 combined)
     """
-    # 1. Exact-key cache hit — return immediately
-    cached = await _read_search_cache(conn, query, location, remote_only, experience, user_id)
-    if cached is not None:
-        log.info("job_search.cache_hit", query=query, total=len(cached))
-        return _apply_filters(cached, remote_only=remote_only, location=location, experience=experience)
+    now = datetime.now(tz=timezone.utc)
 
-    # 2. FTS warm cache (legacy path for partial matches while exact cache is cold)
+    # ── 1. Exact-key cache ─────────────────────────────────────────────────────
+    cache_result = await _read_search_cache(conn, query, location, remote_only, experience, user_id)
+    if cache_result is not None:
+        jobs, created_at = cache_result
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        age = (now - created_at).total_seconds()
+        if age > REVALIDATE_AFTER_SECONDS:
+            log.info("job_search.swr_triggered", query=query, age_hours=round(age / 3600, 1))
+            asyncio.create_task(
+                _background_refresh(query, location, remote_only, experience, user_id)
+            )
+        else:
+            log.info("job_search.cache_hit", query=query, total=len(jobs))
+        return jobs
+
+    # ── 2. FTS warm cache (legacy — partial match while exact cache is cold) ───
     if not remote_only:
         fts_cached = await _query_cache(conn, query, location, user_id)
         if len(fts_cached) >= 15:
@@ -367,68 +533,57 @@ async def search_jobs(
             await _write_search_cache(conn, query, location, remote_only, experience, results)
             return results
 
-    # Sources that support location-based filtering — always queried
-    tasks = [
-        jsearch_client.search(
-            query=query,
-            location=location,
-            remote_only=remote_only,
-            experience=experience,
-            date_posted="3days",
-            page=1,
-            num_pages=2,
-        ),
-        adzuna_client.search(query=query, location=location, max_days_old=3, page=1),
-        adzuna_client.search(query=query, location=location, max_days_old=3, page=2),
-        arbeitnow_client.search(query),
-        ats_client.search(query),
-        smartrecruiters_client.search(query),
-        jooble_client.search(query, location),
-        serpapi_client.search(query, location),
+    # ── 3. Live fetch — tiered scatter-gather ──────────────────────────────────
+    tier1_specs, tier2_specs = _build_source_tasks(query, location, remote_only, experience)
+
+    # Fire ALL tasks simultaneously — Tier 2 starts running NOW, not after Tier 1
+    tier1_tasks = [
+        asyncio.create_task(get_breaker(name).call(coro, timeout), name=f"t1:{name}")
+        for name, coro, timeout in tier1_specs
+    ]
+    tier2_tasks = [
+        asyncio.create_task(get_breaker(name).call(coro, timeout), name=f"t2:{name}")
+        for name, coro, timeout in tier2_specs
     ]
 
-    # Remote-only boards — only when user explicitly requests remote jobs
-    if remote_only:
-        tasks += [
-            remotive_client.search(query),
-            jobicy_client.search(query),
-            remoteok_client.search(query),
-            weworkremotely_client.search(query),
-        ]
+    # Wait for Tier 1 (primary sources)
+    tier1_done, tier1_pending = await asyncio.wait(tier1_tasks, timeout=TIER1_DEADLINE)
+    for fut in tier1_pending:
+        fut.cancel()  # Tier-1 stragglers — cancel, Tier-2 is already running
 
-    batches = await asyncio.gather(*tasks, return_exceptions=True)
+    tier1_jobs = _collect_done(tier1_done)
+    log.info("job_search.tier1_done", query=query, jobs=len(tier1_jobs))
 
-    all_raw: list[dict[str, Any]] = []
-    for batch in batches:
-        if isinstance(batch, list):
-            all_raw.extend(batch)
+    if len(tier1_jobs) >= MIN_EARLY_RETURN:
+        # ── Early return: enough primary results — serve now, merge Tier-2 in background
+        results = await _process_and_cache(
+            conn, tier1_jobs, query, location, remote_only, experience, user_id
+        )
+        asyncio.create_task(
+            _finalize_tier2(tier2_tasks, results, query, location, remote_only, experience, user_id)
+        )
+        log.info("job_search.early_return", query=query, total=len(results))
+        return results
 
-    # Dedup by (source, external_id)
-    seen: set[str] = set()
-    unique: list[dict[str, Any]] = []
-    for j in all_raw:
-        key = f"{j['source']}:{j['external_id']}"
-        if key not in seen and j.get("apply_url") and j.get("title"):
-            seen.add(key)
-            unique.append(j)
+    # ── Full wait: not enough from Tier 1 — wait for Tier 2 with remaining budget
+    remaining = max(0.5, TIER2_BUDGET - TIER1_DEADLINE)
+    tier2_done, tier2_pending = await asyncio.wait(tier2_tasks, timeout=remaining)
+    for fut in tier2_pending:
+        fut.cancel()
 
-    cached_rows = await _upsert_jobs(conn, unique)
-    bookmark_map = await _build_bookmark_map(conn, user_id)
+    tier2_jobs = _collect_done(tier2_done)
+    all_raw = tier1_jobs + tier2_jobs
 
-    results = [_enrich_row(row, bookmark_map) for row in cached_rows]
-    results.sort(key=lambda x: x["freshness_score"], reverse=True)
-
-    results = _apply_filters(results, remote_only=remote_only, location=location, experience=experience)
-
-    # Write to exact-key cache for future requests
-    await _write_search_cache(conn, query, location, remote_only, experience, results)
-
+    results = await _process_and_cache(
+        conn, all_raw, query, location, remote_only, experience, user_id
+    )
     log.info(
         "job_search.completed",
         query=query,
         total=len(results),
         raw=len(all_raw),
-        unique=len(unique),
+        tier1=len(tier1_jobs),
+        tier2=len(tier2_jobs),
     )
     return results
 
@@ -446,7 +601,6 @@ async def get_similar_jobs(
     )
     if not source_row:
         return []
-
     rows = await conn.fetch(
         """
         SELECT * FROM job_cache
@@ -458,6 +612,5 @@ async def get_similar_jobs(
         """,
         job_cache_id, source_row["title"], limit,
     )
-
     bookmark_map = await _build_bookmark_map(conn, user_id)
     return [_enrich_row(row, bookmark_map) for row in rows]
