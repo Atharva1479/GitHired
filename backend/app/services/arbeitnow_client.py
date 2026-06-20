@@ -52,6 +52,15 @@ def _normalise(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _title_matches(title: str, query: str) -> bool:
+    """Return True if the job title contains at least one query keyword (≥4 chars)."""
+    title_lower = title.lower()
+    keywords = [w.strip(",.") for w in query.lower().split() if len(w.strip(",. ")) >= 4]
+    if not keywords:
+        return True  # very short query — don't filter anything
+    return any(kw in title_lower for kw in keywords)
+
+
 async def search(query: str) -> list[dict[str, Any]]:
     """Search Arbeitnow and return normalised job dicts."""
     try:
@@ -64,9 +73,8 @@ async def search(query: str) -> list[dict[str, Any]]:
         return []
 
     jobs = data.get("data") or []
-    keywords = {w.lower() for w in query.split() if len(w) > 2}
-    log.info("arbeitnow.fetched", count=len(jobs), query=query)
-    return [
-        _normalise(j) for j in jobs
-        if j.get("url") and any(kw in (j.get("title") or "").lower() for kw in keywords)
-    ]
+    results = [_normalise(j) for j in jobs if j.get("url")]
+    # Filter by title keyword relevance — Arbeitnow is global, no location support
+    results = [r for r in results if _title_matches(r["title"], query)]
+    log.info("arbeitnow.fetched", query=query, count=len(results))
+    return results
