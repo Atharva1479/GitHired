@@ -21,6 +21,7 @@ Freshness filtering is client-side — the full 3-day window is always returned.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -264,6 +265,76 @@ def _apply_filters(
     return results
 
 
+# ── Exact-key query result cache ──────────────────────────────────────────────
+
+def _cache_key(query: str, location: str | None, remote_only: bool, experience: str | None) -> str:
+    """MD5 of normalised search parameters — used as the exact cache lookup key."""
+    raw = f"{query.lower().strip()}|{(location or '').lower().strip()}|{remote_only}|{experience or ''}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
+async def _read_search_cache(
+    conn: asyncpg.Connection,
+    query: str,
+    location: str | None,
+    remote_only: bool,
+    experience: str | None,
+    user_id: int | None,
+) -> list[dict[str, Any]] | None:
+    """Return cached job list if a valid (unexpired) entry exists, else None."""
+    key = _cache_key(query, location, remote_only, experience)
+    row = await conn.fetchrow(
+        "SELECT job_ids FROM job_search_cache WHERE query_hash=$1 AND expires_at > now()",
+        key,
+    )
+    if not row or not row["job_ids"]:
+        return None
+    job_ids: list[int] = list(row["job_ids"])
+    # Fetch from job_cache in the cached order (preserve freshness sort)
+    rows = await conn.fetch(
+        "SELECT * FROM job_cache WHERE id = ANY($1::int[]) AND expires_at > now()",
+        job_ids,
+    )
+    if not rows:
+        return None
+    # Re-sort to match the original cached order
+    rows_by_id = {r["id"]: r for r in rows}
+    ordered = [rows_by_id[jid] for jid in job_ids if jid in rows_by_id]
+    bookmark_map = await _build_bookmark_map(conn, user_id)
+    return [_enrich_row(r, bookmark_map) for r in ordered]
+
+
+async def _write_search_cache(
+    conn: asyncpg.Connection,
+    query: str,
+    location: str | None,
+    remote_only: bool,
+    experience: str | None,
+    results: list[dict[str, Any]],
+) -> None:
+    """Upsert the result set's job IDs into job_search_cache with 4h TTL."""
+    key = _cache_key(query, location, remote_only, experience)
+    job_ids = [r["id"] for r in results if r.get("id")]
+    expires_at = datetime.now(tz=timezone.utc) + timedelta(hours=settings.job_cache_ttl_hours)
+    await conn.execute(
+        """
+        INSERT INTO job_search_cache
+          (query_hash, query, location, remote_only, experience, job_ids, expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (
+            query_hash,
+            COALESCE(location, ''),
+            remote_only,
+            COALESCE(experience, '')
+        ) DO UPDATE SET
+            job_ids    = EXCLUDED.job_ids,
+            expires_at = EXCLUDED.expires_at,
+            created_at = now()
+        """,
+        key, query, location, remote_only, experience, job_ids, expires_at,
+    )
+
+
 # ── Main search ────────────────────────────────────────────────────────────────
 
 async def search_jobs(
@@ -276,17 +347,23 @@ async def search_jobs(
 ) -> list[dict[str, Any]]:
     """Fetch jobs from all sources, cache, and return sorted by freshness.
 
-    Cache-first: returns from job_cache when ≥15 unexpired FTS-matched rows exist.
-    Freshness filtering is client-side — the full 3-day window is returned.
-    Remote-only sources (Remotive, RemoteOK, Jobicy, WeWorkRemotely) are only
-    queried when remote_only=True — they produce noise for location-based searches.
-    Results are sorted by freshness score; no resume-based re-ranking.
+    Exact-key cache: hashes (query, location, remote_only, experience) → job_ids[] with 4h TTL.
+    Repeat searches return in <5ms. Remote-only boards skipped for location searches.
     """
+    # 1. Exact-key cache hit — return immediately
+    cached = await _read_search_cache(conn, query, location, remote_only, experience, user_id)
+    if cached is not None:
+        log.info("job_search.cache_hit", query=query, total=len(cached))
+        return _apply_filters(cached, remote_only=remote_only, location=location, experience=experience)
+
+    # 2. FTS warm cache (legacy path for partial matches while exact cache is cold)
     if not remote_only:
-        cached = await _query_cache(conn, query, location, user_id)
-        if len(cached) >= 15:
-            log.info("job_search.cache_hit", query=query, total=len(cached))
-            return _apply_filters(cached, remote_only=False, location=location, experience=experience)
+        fts_cached = await _query_cache(conn, query, location, user_id)
+        if len(fts_cached) >= 15:
+            log.info("job_search.fts_cache_hit", query=query, total=len(fts_cached))
+            results = _apply_filters(fts_cached, remote_only=False, location=location, experience=experience)
+            await _write_search_cache(conn, query, location, remote_only, experience, results)
+            return results
 
     # Sources that support location-based filtering — always queried
     tasks = [
@@ -338,6 +415,9 @@ async def search_jobs(
     results.sort(key=lambda x: x["freshness_score"], reverse=True)
 
     results = _apply_filters(results, remote_only=remote_only, location=location, experience=experience)
+
+    # Write to exact-key cache for future requests
+    await _write_search_cache(conn, query, location, remote_only, experience, results)
 
     log.info(
         "job_search.completed",
