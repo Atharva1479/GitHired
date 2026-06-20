@@ -273,40 +273,23 @@ async def search_jobs(
     remote_only: bool = False,
     experience: str | None = None,
     user_id: int | None = None,
-    resume_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Fetch jobs from all sources, cache, semantic-rank, and return.
+    """Fetch jobs from all sources, cache, and return sorted by freshness.
 
     Cache-first: returns from job_cache when ≥15 unexpired FTS-matched rows exist.
     Freshness filtering is client-side — the full 3-day window is returned.
-    Resume selection: auto-detect from query keywords (Option A) or explicit
-    resume_id override (Option B).
+    Remote-only sources (Remotive, RemoteOK, Jobicy, WeWorkRemotely) are only
+    queried when remote_only=True — they produce noise for location-based searches.
+    Results are sorted by freshness score; no resume-based re-ranking.
     """
     if not remote_only:
         cached = await _query_cache(conn, query, location, user_id)
         if len(cached) >= 15:
             log.info("job_search.cache_hit", query=query, total=len(cached))
-            cached = _apply_filters(cached, remote_only=False, location=location, experience=experience)
-            if user_id:
-                resume_text, resume_name = await pick_resume(conn, user_id, query, resume_id)
-                if resume_text:
-                    log.info("job_search.ranking_cache", resume=resume_name)
-                    cached = rank_jobs_by_resume(cached, resume_text)
-            return cached
+            return _apply_filters(cached, remote_only=False, location=location, experience=experience)
 
-    # Parallel fetch across all sources
-    (
-        jsearch_raw,
-        adzuna_p1,
-        adzuna_p2,
-        arbeitnow_raw,
-        remotive_raw,
-        jobicy_raw,
-        remoteok_raw,
-        wwr_raw,
-        ats_raw,
-        sr_raw,
-    ) = await asyncio.gather(
+    # Sources that support location-based filtering — always queried
+    tasks = [
         jsearch_client.search(
             query=query,
             location=location,
@@ -319,21 +302,23 @@ async def search_jobs(
         adzuna_client.search(query=query, location=location, max_days_old=3, page=1),
         adzuna_client.search(query=query, location=location, max_days_old=3, page=2),
         arbeitnow_client.search(query),
-        remotive_client.search(query),
-        jobicy_client.search(query),
-        remoteok_client.search(query),
-        weworkremotely_client.search(query),
         ats_client.search(query),
         smartrecruiters_client.search(query),
-        return_exceptions=True,
-    )
+    ]
+
+    # Remote-only boards — only when user explicitly requests remote jobs
+    if remote_only:
+        tasks += [
+            remotive_client.search(query),
+            jobicy_client.search(query),
+            remoteok_client.search(query),
+            weworkremotely_client.search(query),
+        ]
+
+    batches = await asyncio.gather(*tasks, return_exceptions=True)
 
     all_raw: list[dict[str, Any]] = []
-    for batch in (
-        jsearch_raw, adzuna_p1, adzuna_p2,
-        arbeitnow_raw, remotive_raw, jobicy_raw, remoteok_raw,
-        wwr_raw, ats_raw, sr_raw,
-    ):
+    for batch in batches:
         if isinstance(batch, list):
             all_raw.extend(batch)
 
@@ -352,15 +337,7 @@ async def search_jobs(
     results = [_enrich_row(row, bookmark_map) for row in cached_rows]
     results.sort(key=lambda x: x["freshness_score"], reverse=True)
 
-    # Post-filters — applied before semantic re-rank so ranker sees clean data
     results = _apply_filters(results, remote_only=remote_only, location=location, experience=experience)
-
-    # Semantic re-rank
-    if user_id:
-        resume_text, resume_name = await pick_resume(conn, user_id, query, resume_id)
-        if resume_text:
-            log.info("job_search.ranking", resume=resume_name, jobs=len(results))
-            results = rank_jobs_by_resume(results, resume_text)
 
     log.info(
         "job_search.completed",

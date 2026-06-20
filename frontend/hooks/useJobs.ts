@@ -8,6 +8,7 @@ import {
   bookmarkJob,
   createSavedSearch,
   deleteSavedSearch,
+  getNewJobsCount,
   getSimilarJobs,
   listSavedSearches,
   matchResume,
@@ -18,6 +19,7 @@ import type { JobSearchCreate, SearchParams } from "@/types/jobs";
 export const JOB_KEYS = {
   search: (params: SearchParams) => ["jobs", "search", params] as const,
   searches: () => ["jobs", "searches"] as const,
+  newCount: () => ["jobs", "searches", "new-count"] as const,
 };
 
 export function useJobSearch(params: SearchParams | null, freshnessHours = 72) {
@@ -43,6 +45,15 @@ export function useSavedSearches() {
   return useQuery({
     queryKey: JOB_KEYS.searches(),
     queryFn: listSavedSearches,
+  });
+}
+
+export function useNewJobsCount() {
+  return useQuery({
+    queryKey: JOB_KEYS.newCount(),
+    queryFn: getNewJobsCount,
+    staleTime: 1000 * 60 * 5,   // recheck every 5 min
+    refetchInterval: 1000 * 60 * 5,
   });
 }
 

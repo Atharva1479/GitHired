@@ -32,7 +32,6 @@ async def search_jobs(
     location: str | None = Query(default=None),
     remote_only: bool = Query(default=False),
     experience: str | None = Query(default=None),
-    resume_id: int | None = Query(default=None),
     conn: asyncpg.Connection = Depends(get_db),
     user_id: int = Depends(get_user_id),
 ) -> list[JobResult]:
@@ -43,7 +42,6 @@ async def search_jobs(
         remote_only=remote_only,
         experience=experience,
         user_id=user_id,
-        resume_id=resume_id,
     )
     return [JobResult(**r) for r in results]
 
@@ -55,6 +53,16 @@ async def list_searches(
 ) -> list[JobSearchOut]:
     rows = await repo.list_searches(conn, user_id)
     return [JobSearchOut(**dict(r)) for r in rows]
+
+
+@router.get("/searches/new-count")
+async def new_jobs_count(
+    conn: asyncpg.Connection = Depends(get_db),
+    user_id: int = Depends(get_user_id),
+) -> JSONResponse:
+    """Return total new jobs across all active saved searches since last alert."""
+    total = await repo.count_new_jobs_for_user(conn, user_id)
+    return JSONResponse({"total_new": total})
 
 
 @router.post("/searches", response_model=JobSearchOut, status_code=status.HTTP_201_CREATED)

@@ -70,6 +70,53 @@ async def list_active_searches_all_users(
     )
 
 
+async def count_new_jobs_for_user(
+    conn: asyncpg.Connection,
+    user_id: int,
+) -> int:
+    """Count jobs in job_cache that arrived after each saved search was last alerted.
+
+    Uses FTS to match jobs against each search's query, counting only rows whose
+    first_seen_at is newer than last_alerted_at (or all rows when never alerted).
+    """
+    searches = await conn.fetch(
+        "SELECT id, query, location, last_alerted_at FROM job_searches WHERE user_id=$1 AND is_active=true",
+        user_id,
+    )
+    if not searches:
+        return 0
+
+    total = 0
+    for s in searches:
+        since = s["last_alerted_at"]
+        if since is None:
+            # Never alerted — count all unexpired matching jobs
+            count = await conn.fetchval(
+                """
+                SELECT COUNT(*) FROM job_cache
+                WHERE expires_at > now()
+                  AND to_tsvector('english', COALESCE(title,'') || ' ' || COALESCE(description,''))
+                      @@ plainto_tsquery('english', $1)
+                  AND ($2::text IS NULL OR location ILIKE '%' || $2 || '%')
+                """,
+                s["query"], s["location"],
+            )
+        else:
+            count = await conn.fetchval(
+                """
+                SELECT COUNT(*) FROM job_cache
+                WHERE expires_at > now()
+                  AND first_seen_at > $3
+                  AND to_tsvector('english', COALESCE(title,'') || ' ' || COALESCE(description,''))
+                      @@ plainto_tsquery('english', $1)
+                  AND ($2::text IS NULL OR location ILIKE '%' || $2 || '%')
+                """,
+                s["query"], s["location"], since,
+            )
+        total += count or 0
+    return total
+
+
 # ── Bookmarks ─────────────────────────────────────────────────────────────────
 
 async def upsert_bookmark(

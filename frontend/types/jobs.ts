@@ -57,7 +57,6 @@ export interface SearchParams {
   remote_only?: boolean;
   experience?: string;
   employment_type?: string;  // client-side filter only
-  resume_id?: number;        // Option B: manual resume override (null = auto-detect)
 }
 
 export interface ApplyAndTrackResponse {

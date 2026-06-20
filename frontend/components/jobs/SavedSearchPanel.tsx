@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Bell, Plus, Trash2 } from "lucide-react";
 
-import { useCreateSavedSearch, useDeleteSavedSearch, useSavedSearches } from "@/hooks/useJobs";
+import { useCreateSavedSearch, useDeleteSavedSearch, useNewJobsCount, useSavedSearches } from "@/hooks/useJobs";
 import type { SearchParams } from "@/types/jobs";
 
 interface SavedSearchPanelProps {
@@ -12,10 +12,13 @@ interface SavedSearchPanelProps {
 
 export default function SavedSearchPanel({ currentParams, onLoad }: SavedSearchPanelProps) {
   const { data: searches } = useSavedSearches();
+  const { data: newCount } = useNewJobsCount();
   const { mutate: createSearch, isPending: creating } = useCreateSavedSearch();
   const { mutate: deleteSearch } = useDeleteSavedSearch();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
+
+  const totalNew = newCount?.total_new ?? 0;
 
   function handleSave() {
     if (!currentParams || !name.trim()) return;
@@ -33,8 +36,20 @@ export default function SavedSearchPanel({ currentParams, onLoad }: SavedSearchP
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <Bell className="w-4 h-4 text-[var(--color-text-3)] shrink-0" />
-      <span className="text-xs text-[var(--color-text-3)] font-medium">Saved alerts:</span>
+      <div className="relative shrink-0">
+        <Bell className="w-4 h-4 text-[var(--color-text-3)]" />
+        {totalNew > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+            {totalNew > 99 ? "99+" : totalNew}
+          </span>
+        )}
+      </div>
+      <span className="text-xs text-[var(--color-text-3)] font-medium">
+        Saved alerts:
+        {totalNew > 0 && (
+          <span className="ml-1 text-red-500 font-semibold">{totalNew} new</span>
+        )}
+      </span>
 
       {searches?.map((s) => (
         <div
