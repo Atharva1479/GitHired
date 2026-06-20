@@ -113,6 +113,11 @@ class Settings(BaseSettings):
     # Free tier: 500 requests/day.
     jooble_api_key: SecretStr | None = None
 
+    # SerpAPI Google Jobs: https://serpapi.com/
+    # Covers LinkedIn India, Naukri, Indeed India, Glassdoor — near real-time freshness.
+    # Free tier: 100 searches/month.
+    serpapi_api_key: SecretStr | None = None
+
     # Cache TTL: how long (hours) to keep job results in the DB before re-fetching
     job_cache_ttl_hours: int = 4
 

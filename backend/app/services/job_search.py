@@ -39,6 +39,7 @@ from app.services import (
     jsearch_client,
     remoteok_client,
     remotive_client,
+    serpapi_client,
     smartrecruiters_client,
     weworkremotely_client,
 )
@@ -383,6 +384,7 @@ async def search_jobs(
         ats_client.search(query),
         smartrecruiters_client.search(query),
         jooble_client.search(query, location),
+        serpapi_client.search(query, location),
     ]
 
     # Remote-only boards — only when user explicitly requests remote jobs
