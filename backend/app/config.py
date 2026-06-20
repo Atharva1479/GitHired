@@ -108,6 +108,11 @@ class Settings(BaseSettings):
     adzuna_app_id: str | None = None
     adzuna_api_key: str | None = None
 
+    # Jooble job aggregator: https://jooble.org/api/about
+    # Aggregates from Naukri, LinkedIn India, Monster India, TimesJobs, Shine, Foundit.
+    # Free tier: 500 requests/day.
+    jooble_api_key: SecretStr | None = None
+
     # Cache TTL: how long (hours) to keep job results in the DB before re-fetching
     job_cache_ttl_hours: int = 4
 
