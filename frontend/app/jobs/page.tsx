@@ -11,6 +11,31 @@ import SavedSearchPanel from "@/components/jobs/SavedSearchPanel";
 import { useBookmarkJob, useJobSearch } from "@/hooks/useJobs";
 import type { JobResult, SearchParams } from "@/types/jobs";
 
+const SEARCH_SOURCES = [
+  "Searching JSearch…",
+  "Querying Adzuna…",
+  "Checking Arbeitnow…",
+  "Scanning ATS boards…",
+  "Filtering & ranking…",
+];
+
+function SearchProgress() {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setStep((s) => (s + 1) % SEARCH_SOURCES.length), 2200);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <div className="w-48 h-1.5 rounded-full bg-[var(--color-border)] overflow-hidden">
+        <div className="h-full bg-indigo-500 rounded-full animate-[progress_2.2s_ease-in-out_infinite]" />
+      </div>
+      <p className="text-sm text-[var(--color-text-3)] animate-pulse">{SEARCH_SOURCES[step]}</p>
+      <p className="text-xs text-[var(--color-text-3)]">Aggregating fresh jobs from multiple sources…</p>
+    </div>
+  );
+}
+
 export default function JobsPage() {
   const _SEARCH_KEY = "jp_job_search";
 
@@ -112,17 +137,7 @@ export default function JobsPage() {
           </div>
         )}
 
-        {isLoading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 animate-pulse">
-                <div className="h-3 w-24 bg-[var(--color-border)] rounded mb-3" />
-                <div className="h-4 w-full bg-[var(--color-border)] rounded mb-2" />
-                <div className="h-3 w-32 bg-[var(--color-border)] rounded" />
-              </div>
-            ))}
-          </div>
-        )}
+        {isLoading && <SearchProgress />}
 
         {error && (
           <div className="rounded-xl bg-red-500/10 ring-1 ring-red-500/20 px-4 py-3 text-sm text-red-600">
