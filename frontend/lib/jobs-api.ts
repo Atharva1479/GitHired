@@ -32,8 +32,9 @@ export async function searchJobs(params: SearchParams): Promise<JobResult[]> {
   // Client-side employment type filter (data already in results)
   if (params.employment_type) {
     const needle = params.employment_type.toLowerCase();
+    // null employment_type = unknown, keep it rather than hide it
     return jobs.filter(
-      (j) => j.employment_type && j.employment_type.toLowerCase().includes(needle),
+      (j) => !j.employment_type || j.employment_type.toLowerCase().includes(needle),
     );
   }
   return jobs;

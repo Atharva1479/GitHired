@@ -81,20 +81,28 @@ async def lifespan(_: FastAPI):
         except Exception:
             pass
 
-    # Pre-warm ATS ML models in background (graceful — won't crash if unavailable)
-    async def _prewarm_ats() -> None:
+    # Pre-warm ML models in background (graceful — won't crash if unavailable)
+    async def _prewarm_models() -> None:
+        # SentenceTransformer for job ranking (all-MiniLM-L6-v2, ~22 MB)
+        await asyncio.to_thread(
+            lambda: __import__(
+                "app.services.job_ranker", fromlist=["_model"]
+            )._model()
+        )
+        # SentenceTransformer for ATS semantic scoring
         await asyncio.to_thread(
             lambda: __import__(
                 "app.services.ats.semantic_scorer", fromlist=["get_model"]
             ).get_model()
         )
+        # word2vec-google-news-300 for ATS keyword matching (~1.7 GB — slow cold load)
         await asyncio.to_thread(
             lambda: __import__(
                 "app.services.ats.word_semantic", fromlist=["get_vectors"]
             ).get_vectors()
         )
 
-    asyncio.create_task(_prewarm_ats())
+    asyncio.create_task(_prewarm_models())
 
     # Initialize LangGraph interview agent with PostgreSQL checkpointer.
     # AsyncPostgresSaver.from_conn_string is an async context manager that opens
