@@ -15,7 +15,7 @@ Sources:
   - Greenhouse / Lever / Ashby (ATS)  — company watchlist + keyword filter
   - SmartRecruiters (free, no auth)   — verified company boards (freshworks, synechron)
 
-Cache-first: returns from job_cache when ≥15 unexpired FTS-matched rows exist.
+Two-tier cache: exact-key cache (MD5 hash → job_search_cache) checked first, then FTS fallback (≥15 hits), then live API fetch.
 Freshness filtering is client-side — the full 3-day window is always returned.
 """
 from __future__ import annotations

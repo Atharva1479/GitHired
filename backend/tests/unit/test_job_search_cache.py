@@ -1,5 +1,4 @@
 """Tests for exact-key query cache helpers."""
-import pytest
 from app.services.job_search import _cache_key
 
 

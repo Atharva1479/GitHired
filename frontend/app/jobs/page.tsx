@@ -19,6 +19,8 @@ const SEARCH_SOURCES = [
   "Filtering & ranking…",
 ];
 
+const _SEARCH_KEY = "jp_job_search";
+
 function SearchProgress() {
   const [step, setStep] = useState(0);
   useEffect(() => {
@@ -37,8 +39,6 @@ function SearchProgress() {
 }
 
 export default function JobsPage() {
-  const _SEARCH_KEY = "jp_job_search";
-
   const [searchParams, setSearchParams] = useState<SearchParams | null>(() => {
     if (typeof window === "undefined") return null;
     try {
