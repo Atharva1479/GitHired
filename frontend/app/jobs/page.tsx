@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Briefcase, TrendingUp, Zap } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -12,11 +12,42 @@ import { useBookmarkJob, useJobSearch } from "@/hooks/useJobs";
 import type { JobResult, SearchParams } from "@/types/jobs";
 
 export default function JobsPage() {
-  const [searchParams, setSearchParams]     = useState<SearchParams | null>(null);
-  const [freshnessHours, setFreshnessHours] = useState(72);
+  const _SEARCH_KEY = "jp_job_search";
+
+  const [searchParams, setSearchParams] = useState<SearchParams | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem(_SEARCH_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { params: SearchParams; freshness: number };
+      return parsed.params ?? null;
+    } catch {
+      return null;
+    }
+  });
+  const [freshnessHours, setFreshnessHours] = useState<number>(() => {
+    if (typeof window === "undefined") return 72;
+    try {
+      const raw = sessionStorage.getItem(_SEARCH_KEY);
+      if (!raw) return 72;
+      const parsed = JSON.parse(raw) as { params: SearchParams; freshness: number };
+      return parsed.freshness ?? 72;
+    } catch {
+      return 72;
+    }
+  });
   const [applyJob, setApplyJob]             = useState<JobResult | null>(null);
   const [previewJob, setPreviewJob]         = useState<JobResult | null>(null);
   const [appliedCount, setAppliedCount]     = useState(0);
+
+  useEffect(() => {
+    if (!searchParams) return;
+    try {
+      sessionStorage.setItem(_SEARCH_KEY, JSON.stringify({ params: searchParams, freshness: freshnessHours }));
+    } catch {
+      // storage unavailable — ignore
+    }
+  }, [searchParams, freshnessHours]);
 
   const { data: allJobs, filteredData: jobs, isLoading, error } = useJobSearch(searchParams, freshnessHours);
   const { mutate: bookmarkJob } = useBookmarkJob();
