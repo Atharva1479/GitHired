@@ -219,19 +219,20 @@ export function PilotOrb() {
   const openVoiceMode = () => {
     setPanelOpen(false);
     setVoiceMode(true);
-    if (!greetingSpokenRef.current) {
-      // First manual open also triggers a greeting if the auto-greet
-      // didn't run (e.g., user dismissed it before /me resolved).
-      // Continuous-listen will re-arm the mic when the greet ends.
+    // Greet only if this login session hasn't been greeted yet.
+    // Check localStorage (persists across refreshes) not the in-memory ref.
+    const sid = me?.session_id;
+    let alreadyGreeted = false;
+    try {
+      alreadyGreeted = !!sid && localStorage.getItem(_WELCOMED_SID_KEY) === sid;
+    } catch {}
+    if (!alreadyGreeted) {
       greetingSpokenRef.current = true;
+      if (sid) {
+        try { localStorage.setItem(_WELCOMED_SID_KEY, sid); } catch {}
+      }
       const firstName = (me?.display_name ?? "").split(" ")[0] || "there";
       agent.greetWithMessage(buildWelcome(firstName), { fastTts: true });
-    } else if (agent.continuousMode && agent.status === "idle") {
-      // Subsequent re-opens: user already heard the greet, just start
-      // listening so the user can speak immediately without clicking
-      // the pearl. Matches the natural conversation model:
-      //   open voice mode → speak → Pilot replies → re-listen → repeat.
-      void agent.startRecording();
     }
   };
 
