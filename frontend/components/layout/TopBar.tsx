@@ -60,7 +60,8 @@ function JobsDropdown() {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-52 rounded-xl bg-[var(--color-surface)] shadow-xl ring-1 ring-[var(--color-border)] py-1.5 z-50 fade-up">
+        <div className="absolute top-full left-0 w-52 pt-1.5 z-50">
+          <div className="rounded-xl bg-[var(--color-surface)] shadow-xl ring-1 ring-[var(--color-border)] py-1.5 fade-up">
           {JOBS_ITEMS.map(({ href, icon: Icon, label, desc }) => (
             <Link
               key={href}
@@ -77,6 +78,7 @@ function JobsDropdown() {
               </span>
             </Link>
           ))}
+          </div>
         </div>
       )}
     </div>
@@ -106,7 +108,8 @@ function PrepDropdown() {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-52 rounded-xl bg-[var(--color-surface)] shadow-xl ring-1 ring-[var(--color-border)] py-1.5 z-50 fade-up">
+        <div className="absolute top-full left-0 w-52 pt-1.5 z-50">
+          <div className="rounded-xl bg-[var(--color-surface)] shadow-xl ring-1 ring-[var(--color-border)] py-1.5 fade-up">
           {PREP_ITEMS.map(({ href, icon: Icon, label, desc }) => (
             <Link
               key={href}
@@ -123,6 +126,7 @@ function PrepDropdown() {
               </span>
             </Link>
           ))}
+          </div>
         </div>
       )}
     </div>
