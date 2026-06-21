@@ -112,19 +112,51 @@ async def _call(prompt: str, max_tokens: int = 1024, temperature: float = 0.3) -
 
 _DIFFICULTY_CONTEXT = {
     "easy": (
-        "Focus on foundational concepts, standard definitions, and common everyday use cases. "
-        "Suitable for candidates with limited hands-on experience. Avoid edge cases or advanced internals."
+        "Focus on foundational concepts, standard definitions, and basic usage. "
+        "Questions must be approachable for someone early in their career — no internals, no edge cases, no advanced architecture. "
+        "A correct answer should be achievable by someone who has studied the topic but has limited production experience."
     ),
     "medium": (
-        "Cover real-world applied knowledge — practical scenarios, design decisions, debugging situations, "
-        "and trade-off reasoning. Expect candidates to demonstrate solid hands-on experience."
+        "Cover real-world applied knowledge — practical scenarios, common design decisions, debugging situations, "
+        "and simple trade-off reasoning. Expect solid understanding of how the technology is used day-to-day. "
+        "Avoid niche internals or large-scale architecture questions."
     ),
     "hard": (
         "Probe deep expertise — internal implementation details, performance bottlenecks, subtle edge cases, "
         "large-scale architecture decisions, and production-level reasoning. "
-        "Questions should challenge even senior engineers."
+        "Questions should challenge even senior engineers with 5+ years of experience."
     ),
 }
+
+
+def _exp_calibration(years_exp: str) -> str:
+    """Return a calibration note based on stated years of experience."""
+    low = years_exp.split("-")[0].strip()
+    try:
+        yrs = float(low.replace("+", "").replace("yr", "").replace("year", "").strip())
+    except ValueError:
+        return ""
+    if yrs <= 1:
+        return (
+            "IMPORTANT: The candidate has 0-1 years of experience. "
+            "Questions must cover only the most basic, well-known concepts. "
+            "Do NOT ask about internals, concurrency, memory management, advanced design patterns, or anything a junior would not be expected to know."
+        )
+    if yrs <= 2:
+        return (
+            "The candidate has 1-2 years of experience. "
+            "Stick to core concepts and common practical usage. "
+            "Avoid deep internals, advanced architecture, or niche edge cases."
+        )
+    if yrs <= 4:
+        return (
+            "The candidate has 2-4 years of experience. "
+            "Expect solid day-to-day knowledge but avoid highly advanced or niche topics."
+        )
+    return (
+        "The candidate has 5+ years of experience. "
+        "Questions can probe deeper internals, architectural decisions, and production-scale reasoning."
+    )
 
 
 async def plan_interview_topics(
@@ -136,10 +168,13 @@ async def plan_interview_topics(
 ) -> dict[str, Any]:
     """Generate an interview plan: topic clusters + opening question."""
     jd_section = f"\n<job_description>\n{jd_text[:1500]}\n</job_description>" if jd_text else ""
+    exp_note = _exp_calibration(years_exp)
+    exp_line = f"\nExperience calibration: {exp_note}" if exp_note else ""
+
     prompt = f"""Output JSON ONLY. No markdown, no commentary.
 
 You are a senior interviewer planning a {topic} CONCEPTS interview for a {role} with {years_exp} years of experience.
-Difficulty: {difficulty.upper()}{jd_section}
+Difficulty: {difficulty.upper()}{exp_line}{jd_section}
 
 Generate an interview plan with:
 1. topic_clusters: 3-5 specific {topic} concept areas to test (e.g. for Java: ["OOP & Inheritance", "Collections & Generics", "Concurrency", "JVM & Memory"])
@@ -304,6 +339,8 @@ async def generate_questions(
 """
         interview_context = f"{topic} technical interview for a {role} with {years_exp} years of experience"
 
+    exp_note = _exp_calibration(years_exp)
+
     prompt = f"""Output JSON ONLY — a single JSON array of strings. No markdown, no commentary.
 
 You are a senior technical interviewer preparing a {interview_context}.
@@ -313,13 +350,17 @@ Level: {difficulty.upper()}
 {difficulty_guidance}
 </difficulty>
 
+<experience_calibration>
+{exp_note}
+</experience_calibration>
+
 <task>
-Generate exactly {count} interview questions calibrated to the {difficulty} difficulty level above.
+Generate exactly {count} interview questions calibrated to BOTH the difficulty level AND the candidate's experience above.
 </task>
 
 <guidelines>
 {instructions}
-- Questions must progress in complexity, all staying within the {difficulty} difficulty band.
+- Questions must progress in complexity, all staying within the {difficulty} difficulty band appropriate for the stated experience level.
 - Each question must be one complete, clear sentence.
 - All questions must be distinct — no repetition of concepts or phrasing.
 </guidelines>
