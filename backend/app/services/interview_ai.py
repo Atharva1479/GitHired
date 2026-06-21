@@ -373,22 +373,52 @@ Return format (JSON array only): ["question 1", "question 2", ..., "question {co
     return [str(q) for q in result[:count]]
 
 
+async def _generate_ideal_only(topic: str, role: str, question: str) -> str:
+    """Return just the ideal answer for a question — used when the user's answer is too short."""
+    prompt = f"""Output JSON ONLY. No markdown, no commentary.
+
+Write the ideal answer to this {topic} interview question for a {role} role.
+Question: {question}
+
+Return: {{"ideal_answer": "<3-5 sentences in first person, concrete and specific>"}}"""
+    try:
+        result = await _call(prompt, max_tokens=300, temperature=0.3)
+        return str(result.get("ideal_answer", ""))
+    except Exception:
+        return ""
+
+
 async def evaluate_turn(
     topic: str,
     role: str,
     question: str,
     user_answer: str,
 ) -> dict[str, Any]:
+    trimmed = user_answer.strip()
+    word_count = len(trimmed.split()) if trimmed else 0
+
+    # Hard guard: answers under 4 words are never meaningful — score them
+    # without calling the LLM so the AI can't inflate the score.
+    if word_count <= 3:
+        ideal = await _generate_ideal_only(topic, role, question)
+        score = 0 if word_count == 0 else 1
+        feedback = (
+            "No answer provided." if word_count == 0
+            else f"Your answer ('{trimmed}') is too short to demonstrate any knowledge. "
+                 "A complete answer requires explaining the concept clearly with supporting details."
+        )
+        return {"ideal_answer": ideal, "score": score, "feedback": feedback}
+
     prompt = f"""Output JSON ONLY. No markdown, no commentary.
 
-You are an expert interviewer evaluating a candidate response in a {topic} interview for a {role} role.
+You are a strict technical interviewer evaluating a candidate response in a {topic} interview for a {role} role.
 
 <question>
 {question}
 </question>
 
 <candidate_answer>
-{user_answer if user_answer.strip() else "[No answer provided]"}
+{trimmed}
 </candidate_answer>
 
 <task>
@@ -401,11 +431,13 @@ Evaluate the response and return this exact JSON structure:
 </task>
 
 <scoring_rubric>
-0-2: No answer, completely off-topic, or factually wrong
+0-2: No answer, single-word/nonsensical answer, completely off-topic, or factually wrong. MUST score 0-2 if the answer does not actually address the question.
 3-4: Shows awareness but lacks structure, specifics, or key points
 5-6: Adequate — covers the basics but lacks depth or precision
 7-8: Good answer with only minor gaps or imprecision
 9-10: Excellent — complete, well-structured, insightful
+
+STRICT RULE: If the answer does not demonstrate actual knowledge of the topic, score it 0-2 regardless of length or confidence.
 </scoring_rubric>"""
 
     try:
