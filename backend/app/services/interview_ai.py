@@ -138,12 +138,12 @@ async def plan_interview_topics(
     jd_section = f"\n<job_description>\n{jd_text[:1500]}\n</job_description>" if jd_text else ""
     prompt = f"""Output JSON ONLY. No markdown, no commentary.
 
-You are a senior interviewer planning a {topic} interview for a {role} with {years_exp} years of experience.
+You are a senior interviewer planning a {topic} CONCEPTS interview for a {role} with {years_exp} years of experience.
 Difficulty: {difficulty.upper()}{jd_section}
 
 Generate an interview plan with:
-1. topic_clusters: 3-5 specific skill areas to test (e.g. ["Core Concepts", "System Design", "Debugging"])
-2. opening_question: One strong opening question to start the interview
+1. topic_clusters: 3-5 specific {topic} concept areas to test (e.g. for Java: ["OOP & Inheritance", "Collections & Generics", "Concurrency", "JVM & Memory"])
+2. opening_question: One strong opening concept question to start the interview. NEVER ask about past projects or experience — ask about a specific concept.
 3. opening_topic_tag: Which cluster the opening question belongs to
 
 Return exactly:
@@ -288,16 +288,19 @@ async def generate_questions(
     else:
         # Custom or tech-specific topic (e.g. Java, Spring Boot, FastAPI, Gen AI)
         instructions = f"""\
-- This is a technical interview focused specifically on: {topic}
+- This is a technical concept interview focused specifically on: {topic}
 - Generate questions actually asked in real {topic} interviews at companies like Google, Amazon, Microsoft, Flipkart, etc.
-- Cover a mix of: core concepts, common real-world pitfalls, best practices, architectural decisions, and debugging scenarios.
-- Questions should reveal depth of hands-on experience — not just "what is X" but "how/why/when would you use X?"
+- Cover a mix of: core concepts, language internals, common real-world pitfalls, best practices, architectural decisions, and debugging scenarios.
+- Questions should reveal depth of understanding — not just "what is X" but "how/why/when would you use X?"
 - NEVER ask the candidate to write code. All questions must be answerable verbally.
-- Examples of good question styles:
+- NEVER ask about projects the candidate has worked on, their past experience, or their personal background. This is a CONCEPTS interview, not a behavioral interview.
+- NEVER use phrasing like "Tell me about a project", "Describe your experience with", "Have you used X in your work", "Walk me through something you built".
+- Examples of CORRECT question styles:
     "How does X work internally and what are its performance implications?"
     "When would you choose X over Y, and what trade-offs does that involve?"
-    "Walk me through how you would debug [common problem in this technology]."
-    "What are the most common mistakes developers make with X?"
+    "What happens under the hood when you call [common API in {topic}]?"
+    "What are the most common mistakes developers make with X and how do you avoid them?"
+    "Explain the difference between X and Y in {topic}."
 """
         interview_context = f"{topic} technical interview for a {role} with {years_exp} years of experience"
 
