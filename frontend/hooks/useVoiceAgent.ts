@@ -140,12 +140,12 @@ export function useVoiceAgent() {
     }
   });
   const [continuousMode, setContinuousMode] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
+    if (typeof window === "undefined") return false;
     try {
       const v = window.localStorage.getItem(_CONTINUOUS_KEY);
-      return v === null ? true : v === "1";
+      return v === "1"; // default OFF — mic only runs when user explicitly presses
     } catch {
-      return true;
+      return false;
     }
   });
   const [bargeInEnabled, setBargeInEnabled] = useState<boolean>(() => {
