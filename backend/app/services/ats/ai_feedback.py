@@ -144,12 +144,12 @@ async def generate_ats_feedback(data: dict[str, Any]) -> dict[str, Any]:
     """
     prompt = _build_prompt(data)
     try:
-        return await _gemini_feedback(prompt)
+        return await asyncio.wait_for(_gemini_feedback(prompt), timeout=12.0)
     except Exception as e:
         log.warning("ats_feedback.gemini_failed", error=str(e))
 
     try:
-        result = await _ollama_feedback(prompt)
+        result = await asyncio.wait_for(_ollama_feedback(prompt), timeout=45.0)
         log.info("ats_feedback.ollama_ok")
         return result
     except Exception as e:
