@@ -7,8 +7,11 @@ _DATA_PATH = os.path.join(os.path.dirname(__file__), "../../data/ats/esco_skills
 
 @lru_cache(maxsize=1)
 def _load() -> dict:
-    with open(_DATA_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(_DATA_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, OSError):
+        return {}
 
 
 def get_all_skills() -> set[str]:
