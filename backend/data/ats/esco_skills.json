@@ -1,0 +1,88 @@
+{
+  "ict_skills": [
+    "Python", "Java", "JavaScript", "TypeScript", "C++", "C#", "Go", "Rust", "Kotlin", "Swift",
+    "React", "Angular", "Vue.js", "Next.js", "Node.js", "Django", "FastAPI", "Flask", "Spring Boot",
+    "PostgreSQL", "MySQL", "MongoDB", "Redis", "Elasticsearch", "Cassandra", "DynamoDB",
+    "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "Ansible", "Jenkins", "GitHub Actions",
+    "REST API", "GraphQL", "gRPC", "Microservices", "Kafka", "RabbitMQ", "Celery",
+    "Git", "Linux", "Bash", "PowerShell", "CI/CD", "DevOps", "SRE",
+    "HTML", "CSS", "Tailwind CSS", "Webpack", "Vite",
+    "TensorFlow", "PyTorch", "scikit-learn", "Pandas", "NumPy", "OpenCV",
+    "Spark", "Hadoop", "Airflow", "dbt", "Snowflake", "BigQuery",
+    "Nginx", "Apache", "Load Balancing", "CDN", "OAuth", "JWT",
+    "Unit Testing", "Integration Testing", "Pytest", "Jest", "Selenium",
+    "Agile", "Scrum", "Kanban", "JIRA", "Confluence"
+  ],
+  "data_skills": [
+    "Data Analysis", "Data Engineering", "Data Science", "Machine Learning", "Deep Learning",
+    "Natural Language Processing", "Computer Vision", "Reinforcement Learning",
+    "Feature Engineering", "Model Training", "Model Deployment", "MLOps",
+    "SQL", "NoSQL", "ETL", "ELT", "Data Pipelines", "Data Warehousing", "Data Lakes",
+    "A/B Testing", "Statistical Analysis", "Hypothesis Testing", "Regression Analysis",
+    "Power BI", "Tableau", "Looker", "Grafana", "Kibana",
+    "Excel", "Google Sheets", "R", "MATLAB", "Jupyter", "Databricks"
+  ],
+  "engineering_skills": [
+    "System Design", "Software Architecture", "Distributed Systems", "High Availability",
+    "Fault Tolerance", "Scalability", "Performance Optimization", "Caching",
+    "Database Design", "ORM", "Object-Oriented Programming", "Functional Programming",
+    "Design Patterns", "SOLID Principles", "Clean Code", "Code Review",
+    "API Design", "Security", "Authentication", "Authorization", "Encryption",
+    "Monitoring", "Logging", "Observability", "Tracing", "Alerting",
+    "Cloud Architecture", "Serverless", "Event-Driven Architecture",
+    "Mobile Development", "Android", "iOS", "React Native", "Flutter",
+    "Embedded Systems", "IoT", "Networking", "TCP/IP", "HTTP", "WebSockets"
+  ],
+  "soft_skills": [
+    "Communication", "Teamwork", "Problem Solving", "Critical Thinking", "Leadership",
+    "Project Management", "Time Management", "Adaptability", "Creativity", "Attention to Detail",
+    "Mentoring", "Collaboration", "Stakeholder Management", "Presentation Skills",
+    "Technical Writing", "Documentation", "Customer Focus", "Product Thinking"
+  ],
+  "degree_keywords": [
+    "Bachelor", "Master", "PhD", "B.Tech", "M.Tech", "B.E.", "M.E.", "B.Sc", "M.Sc",
+    "Computer Science", "Information Technology", "Software Engineering",
+    "Electrical Engineering", "Electronics", "Mathematics", "Statistics",
+    "MBA", "BCA", "MCA", "B.Com", "Diploma"
+  ],
+  "synonyms": {
+    "JavaScript": ["JS", "ECMAScript", "ES6", "ES2015"],
+    "TypeScript": ["TS"],
+    "Python": ["Python3", "Python 3"],
+    "PostgreSQL": ["Postgres", "PG"],
+    "MongoDB": ["Mongo"],
+    "Kubernetes": ["K8s", "k8s"],
+    "Docker": ["Containerization"],
+    "AWS": ["Amazon Web Services", "Amazon AWS"],
+    "GCP": ["Google Cloud", "Google Cloud Platform"],
+    "Azure": ["Microsoft Azure"],
+    "Machine Learning": ["ML"],
+    "Natural Language Processing": ["NLP"],
+    "Computer Vision": ["CV"],
+    "CI/CD": ["Continuous Integration", "Continuous Deployment", "Continuous Delivery"],
+    "REST API": ["RESTful API", "REST", "RESTful"],
+    "React": ["React.js", "ReactJS"],
+    "Node.js": ["NodeJS", "Node"],
+    "Next.js": ["NextJS"],
+    "Vue.js": ["Vue", "VueJS"],
+    "Spring Boot": ["Spring", "Spring Framework"],
+    "Object-Oriented Programming": ["OOP", "Object Oriented"],
+    "GitHub Actions": ["GH Actions"],
+    "TensorFlow": ["TF"],
+    "PyTorch": ["Torch"]
+  },
+  "occupation_skills": {
+    "Software Engineer": ["Python", "Java", "System Design", "Data Structures", "Algorithms", "Git", "REST API", "SQL"],
+    "Frontend Developer": ["React", "JavaScript", "TypeScript", "HTML", "CSS", "Tailwind CSS", "Next.js"],
+    "Backend Developer": ["Python", "Java", "Node.js", "REST API", "SQL", "PostgreSQL", "Docker", "Microservices"],
+    "Full Stack Developer": ["React", "Node.js", "Python", "PostgreSQL", "REST API", "Docker", "Git"],
+    "Data Scientist": ["Python", "Machine Learning", "Pandas", "NumPy", "scikit-learn", "SQL", "Data Analysis"],
+    "Data Engineer": ["Python", "SQL", "Spark", "Airflow", "Kafka", "ETL", "Data Pipelines", "AWS"],
+    "DevOps Engineer": ["Docker", "Kubernetes", "CI/CD", "Terraform", "AWS", "Linux", "Bash", "Monitoring"],
+    "Machine Learning Engineer": ["Python", "TensorFlow", "PyTorch", "MLOps", "Docker", "Kubernetes", "REST API"],
+    "Mobile Developer": ["React Native", "Flutter", "Android", "iOS", "Kotlin", "Swift"],
+    "Cloud Engineer": ["AWS", "Azure", "GCP", "Terraform", "Kubernetes", "Docker", "CI/CD"],
+    "Security Engineer": ["Security", "Authentication", "Encryption", "OAuth", "Linux", "Python"],
+    "QA Engineer": ["Selenium", "Unit Testing", "Integration Testing", "Python", "JIRA", "Test Automation"]
+  }
+}

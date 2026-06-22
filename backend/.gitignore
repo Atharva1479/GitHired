@@ -35,6 +35,7 @@ coverage.xml
 # File uploads + any local sqlite / db dumps. Schema migrations are
 # tracked under app/migrations/.
 data/
+!data/ats/esco_skills.json
 *.db
 *.sqlite
 *.sqlite3
