@@ -12,6 +12,7 @@ from typing import Any
 
 import structlog
 
+from app.config import settings
 from app.services.gemini_service import GeminiUnavailable, _ensure_model
 from app.services.ollama_service import OllamaUnavailable, chat as ollama_chat
 
@@ -149,9 +150,16 @@ async def generate_ats_feedback(data: dict[str, Any]) -> dict[str, Any]:
         log.warning("ats_feedback.gemini_failed", error=str(e))
 
     try:
-        result = await asyncio.wait_for(_ollama_feedback(prompt), timeout=45.0)
+        result = await asyncio.wait_for(
+            _ollama_feedback(prompt), timeout=settings.ollama_timeout_seconds
+        )
         log.info("ats_feedback.ollama_ok")
         return result
+    except asyncio.TimeoutError:
+        log.warning(
+            "ats_feedback.ollama_failed",
+            error=f"timed out after {settings.ollama_timeout_seconds}s",
+        )
     except Exception as e:
         log.warning("ats_feedback.ollama_failed", error=str(e))
 
