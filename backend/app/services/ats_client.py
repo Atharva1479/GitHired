@@ -18,7 +18,8 @@ log = structlog.get_logger("ats_client")
 
 _CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _CACHE_TTL = 86400  # 24 hours
-_SEM = asyncio.Semaphore(10)
+_SEM_SIZE = 10
+_SEM = asyncio.Semaphore(_SEM_SIZE)
 
 # ── Company watchlist ──────────────────────────────────────────────────────────
 # Add/remove slugs as needed. Find a company's slug by visiting their careers
@@ -57,6 +58,11 @@ WATCHLIST: dict[str, list[str]] = {
         "cursor", "perplexity",
     ],
 }
+
+# Derived circuit-breaker timeout: total slugs spread across _SEM_SIZE concurrent
+# connections, 4s per request, plus 10s buffer. Automatically grows when WATCHLIST grows.
+_total_slugs = sum(len(slugs) for slugs in WATCHLIST.values())
+CIRCUIT_BREAKER_TIMEOUT: float = max(20.0, (_total_slugs / _SEM_SIZE) * 4.0 + 10.0)
 
 # NOTE — Why many Indian companies are missing from this list:
 # TCS, Wipro, Infosys, HCL, Cognizant, Capgemini → use Workday / their own portals

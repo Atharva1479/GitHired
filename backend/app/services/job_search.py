@@ -48,7 +48,7 @@ log = structlog.get_logger("job_search")
 # ── Timing constants ───────────────────────────────────────────────────────────
 _T1 = 6.0    # Tier-1 source timeout (paid APIs — reliable, fast)
 _T2 = 10.0   # Tier-2 source timeout (free APIs — slower, less reliable)
-_T_ATS = 25.0  # ATS board crawler (fetches ~25 Greenhouse/Lever/Ashby endpoints concurrently)
+_T_ATS = ats_client.CIRCUIT_BREAKER_TIMEOUT  # scales with WATCHLIST size
 TIER1_DEADLINE = 6.0   # wait this long for Tier-1 results
 TIER2_BUDGET   = 12.0  # absolute max response time (Tier-1 + remaining)
 MIN_EARLY_RETURN = 10  # return Tier-1 results early if we get at least this many
