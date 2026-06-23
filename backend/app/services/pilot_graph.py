@@ -24,6 +24,7 @@ from langgraph.errors import GraphRecursionError
 from langgraph.prebuilt import create_react_agent
 
 from app.config import settings
+from app.database import pool as get_pool
 from app.services import pilot as pilot_module
 from app.services.gemini_service import GeminiUnavailable
 from app.services.ollama_service import OllamaUnavailable
@@ -275,7 +276,7 @@ async def run_turn(
     result = AgentTurnResult(reply="")
 
     try:
-        ctx = ToolContext(user_id=user_id, conn=conn)
+        ctx = ToolContext(user_id=user_id, conn=conn, pool=get_pool())
         tools = adapt_tools(ctx)
 
         system_prompt = await _build_system_prompt(conn, user_id)

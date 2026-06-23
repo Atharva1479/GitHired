@@ -76,10 +76,18 @@ def adapt_tools(ctx: ToolContext) -> list[StructuredTool]:
 
         # Capture tool.name per iteration with a default argument to avoid
         # late-binding closure issues.
+        # Each invocation acquires its own connection from the pool so that
+        # LangGraph's parallel tool dispatch never hits asyncpg's
+        # "another operation is in progress" error on a shared connection.
         async def _coroutine(
             _tool_name: str = tool.name, **kwargs: Any
         ) -> str:
-            result = await dispatch(_tool_name, kwargs, ctx)
+            if ctx.pool is not None:
+                async with ctx.pool.acquire() as tool_conn:
+                    fresh_ctx = ToolContext(user_id=ctx.user_id, conn=tool_conn, pool=ctx.pool)
+                    result = await dispatch(_tool_name, kwargs, fresh_ctx)
+            else:
+                result = await dispatch(_tool_name, kwargs, ctx)
             return json.dumps(result, default=str)
 
         structured = StructuredTool.from_function(

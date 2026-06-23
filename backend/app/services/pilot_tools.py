@@ -61,6 +61,7 @@ CONFIRM_TTL_SECONDS = 300
 class ToolContext:
     user_id: int
     conn: asyncpg.Connection
+    pool: "asyncpg.Pool | None" = None
 
 
 Handler = Callable[[dict[str, Any], ToolContext], Awaitable[dict[str, Any]]]
