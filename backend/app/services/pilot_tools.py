@@ -1844,7 +1844,9 @@ TOOLS: list[Tool] = [
         description=(
             "Aggregate counts (applications, referrals, response rate) for "
             "the user over a given period. Use whenever the user asks 'how "
-            "many' or 'how am I doing'."
+            "many', 'how am I doing', 'my progress', 'today\'s progress', "
+            "'what did I do today', 'this week\'s progress', 'my stats', "
+            "or 'give me a summary'."
         ),
         parameters={
             "type": "object",
