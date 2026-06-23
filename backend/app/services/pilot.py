@@ -21,6 +21,8 @@ from app.services.gemini_service import (
     _ensure_model,  # reuse the configured model singleton
     _estimate_cost_usd,
 )
+from app.services.ollama_service import OllamaUnavailable
+from app.services.ollama_service import chat as ollama_chat
 
 log = structlog.get_logger("pilot")
 
@@ -402,15 +404,32 @@ async def greet(conn: asyncpg.Connection, user_id: int) -> str:
     prompt = _build_greeting_prompt(ctx)
     try:
         text, p, o = await _generate(prompt, max_output_tokens=120)
+        cost = _estimate_cost_usd(p, o)
+        metrics.record_gemini(settings.gemini_model, "ok", cost)
+        metrics.PILOT_TURNS.labels(outcome="ok", kind="greeting").inc()
+        return text
     except Exception as e:  # noqa: BLE001
         log.warning("pilot.greet_failed", error=str(e))
-        metrics.PILOT_TURNS.labels(outcome="error", kind="greeting").inc()
-        return _fallback_greeting(ctx)
 
-    cost = _estimate_cost_usd(p, o)
-    metrics.record_gemini(settings.gemini_model, "ok", cost)
-    metrics.PILOT_TURNS.labels(outcome="ok", kind="greeting").inc()
-    return text
+    # Ollama fallback — short greeting prompt, 30s cap
+    try:
+        resp = await asyncio.wait_for(
+            ollama_chat(
+                [{"role": "user", "content": prompt}],
+                tools=None,
+                temperature=0.7,
+            ),
+            timeout=30.0,
+        )
+        text = (resp.get("message", {}).get("content") or "").strip()
+        if text:
+            metrics.PILOT_TURNS.labels(outcome="ok_ollama", kind="greeting").inc()
+            return text
+    except (OllamaUnavailable, asyncio.TimeoutError, Exception) as e:  # noqa: BLE001
+        log.warning("pilot.greet_ollama_failed", error=str(e))
+
+    metrics.PILOT_TURNS.labels(outcome="error", kind="greeting").inc()
+    return _fallback_greeting(ctx)
 
 
 async def chat_turn(

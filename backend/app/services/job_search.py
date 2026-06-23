@@ -48,6 +48,7 @@ log = structlog.get_logger("job_search")
 # ── Timing constants ───────────────────────────────────────────────────────────
 _T1 = 6.0    # Tier-1 source timeout (paid APIs — reliable, fast)
 _T2 = 10.0   # Tier-2 source timeout (free APIs — slower, less reliable)
+_T_ATS = 25.0  # ATS board crawler (fetches ~25 Greenhouse/Lever/Ashby endpoints concurrently)
 TIER1_DEADLINE = 6.0   # wait this long for Tier-1 results
 TIER2_BUDGET   = 12.0  # absolute max response time (Tier-1 + remaining)
 MIN_EARLY_RETURN = 10  # return Tier-1 results early if we get at least this many
@@ -369,7 +370,7 @@ def _build_source_tasks(
     ]
     tier2: list[tuple[str, Any, float]] = [
         ("arbeitnow",       arbeitnow_client.search(query), _T2),
-        ("ats",             ats_client.search(query), _T2),
+        ("ats",             ats_client.search(query), _T_ATS),
         ("smartrecruiters", smartrecruiters_client.search(query), _T2),
         ("jooble",          jooble_client.search(query, location), _T2),
         ("serpapi",         serpapi_client.search(query, location), _T2),
