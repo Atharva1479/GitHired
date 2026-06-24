@@ -5,7 +5,19 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 Source = Literal["LinkedIn", "Naukri", "Referral", "CompanySite", "Other"]
+# Kept as a Literal for backward-compat (used in query-param annotations).
 Status = Literal["Applied", "Screening", "Interview", "Offer", "Rejected", "Ghosted"]
+
+
+class ApplicationStatus(str, Enum):
+    applied = "Applied"
+    screening = "Screening"
+    interview = "Interview"
+    offer = "Offer"
+    rejected = "Rejected"
+    ghosted = "Ghosted"
+
+
 ConnectionStatus = Literal[
     "Request Sent", "Accepted", "Msg Sent", "Replied", "Referred", "Dropped"
 ]
@@ -51,7 +63,7 @@ class ApplicationUpdate(BaseModel):
     role: str | None = Field(default=None, min_length=1, max_length=200)
     source: Source | None = None
     applied_date: date | None = None
-    status: Status | None = None
+    status: ApplicationStatus | None = None
     notes: str | None = None
     fit_score: int | None = Field(default=None, ge=0, le=100)
     salary_discussed: str | None = None
@@ -66,7 +78,7 @@ class ApplicationOut(BaseModel):
     company: str
     role: str
     source: Source
-    status: Status
+    status: ApplicationStatus
     applied_date: date
     last_updated: datetime
     jd_url: str | None

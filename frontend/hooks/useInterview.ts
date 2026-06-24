@@ -44,6 +44,8 @@ export function useReport(sessionId: number | null) {
     queryKey: INTERVIEW_KEYS.report(sessionId ?? 0),
     queryFn: () => getReport(sessionId!),
     enabled: sessionId !== null,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     refetchInterval: (query) => {
       const data = query.state.data;
       return data?.status === "ready" ? false : 3000;

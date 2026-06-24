@@ -3,16 +3,28 @@ import type { AnalysisResult, TailorResult } from "@/types/ats";
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export async function analyzeResume(formData: FormData): Promise<AnalysisResult> {
-  const res = await fetch(`${BASE}/ats/analyze`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
-  if (!res.ok) {
+  const MAX_RETRIES = 2;
+  let lastError: Error = new Error("Unknown error");
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** (attempt - 1), 10000)));
+    }
+    const res = await fetch(`${BASE}/ats/analyze`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+    if (res.ok) return res.json() as Promise<AnalysisResult>;
+
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? `Error ${res.status}`);
+    if (res.status === 429) {
+      throw new Error("Gemini quota exceeded — try again in a moment.");
+    }
+    lastError = new Error((err as { detail?: string }).detail ?? `Error ${res.status}`);
+    if (res.status < 500) throw lastError;
   }
-  return res.json() as Promise<AnalysisResult>;
+  throw lastError;
 }
 
 export interface ATSFeedback {

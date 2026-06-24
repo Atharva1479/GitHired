@@ -4,7 +4,7 @@ from datetime import date
 
 import asyncpg
 
-from app.models import ApplicationOut, ReferralOut
+from app.models import ApplicationOut, ApplicationStatus, ReferralOut
 from app.repositories import applications as apps_repo
 from app.repositories import nudges as nudges_repo
 from app.repositories import referrals as refs_repo
@@ -26,7 +26,7 @@ def evaluate_application_rules(
     days_since_update = (today - app.last_updated.date()).days
 
     # R1
-    if app.status == "Applied" and days_since_applied >= 7 and app.follow_up_count == 0:
+    if app.status == ApplicationStatus.applied and days_since_applied >= 7 and app.follow_up_count == 0:
         yield NudgeCandidate(
             type="application_followup",
             reference_type="application",
@@ -39,7 +39,7 @@ def evaluate_application_rules(
         )
 
     # R2
-    if app.status == "Applied" and days_since_applied >= 14:
+    if app.status == ApplicationStatus.applied and days_since_applied >= 14:
         yield NudgeCandidate(
             type="application_stale",
             reference_type="application",
@@ -52,7 +52,7 @@ def evaluate_application_rules(
         )
 
     # R3
-    if app.status in ("Screening", "Interview") and days_since_update >= 5:
+    if app.status in (ApplicationStatus.screening, ApplicationStatus.interview) and days_since_update >= 5:
         yield NudgeCandidate(
             type="application_interview_stale",
             reference_type="application",
