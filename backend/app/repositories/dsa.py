@@ -31,6 +31,10 @@ _ANALYSIS_COLS = (
     "dry_run_explanation, model, created_at"
 )
 
+_ALLOWED_DSA_UPDATE_COLS = frozenset({
+    "topic", "difficulty", "title", "source_url", "description", "user_solution",
+})
+
 
 # ──────────────────────────  helpers  ────────────────────────────────
 
@@ -168,6 +172,9 @@ async def update_problem(
     # Handle enum serialization
     if "difficulty" in fields and isinstance(fields.get("difficulty"), DsaDifficulty):
         fields["difficulty"] = fields["difficulty"].value
+    for key in fields:
+        if key not in _ALLOWED_DSA_UPDATE_COLS:
+            raise ValueError(f"Unexpected column: {key}")
     sets = [f"{k} = ${i + 1}" for i, k in enumerate(fields)]
     args: list[object] = list(fields.values())
     sets.append("last_updated = NOW()")

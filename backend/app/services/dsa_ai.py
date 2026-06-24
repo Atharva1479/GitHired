@@ -55,6 +55,7 @@ def _analysis_prompt(
     user_solution: str,
 ) -> str:
     desc_block = f"\n\nProblem Description:\n{description}" if description else ""
+    safe_solution = user_solution.replace("```", "'''")
     return f"""{_JSON_SYSTEM}
 
 You are a senior software engineer and DSA expert reviewing a candidate's solution.
@@ -64,7 +65,7 @@ Topic / Category: {topic}{desc_block}
 
 User's Solution:
 ```
-{user_solution}
+{safe_solution}
 ```
 
 Analyze the solution and respond with this exact JSON structure:

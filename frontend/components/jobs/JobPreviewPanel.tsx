@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { useAtsJobScan, useMatchResume } from "@/hooks/useJobs";
 import type { JobResult } from "@/types/jobs";
+import { safeUrl } from "@/lib/url-utils";
 
 interface JobPreviewPanelProps {
   job: JobResult;
@@ -162,7 +163,7 @@ export default function JobPreviewPanel({ job, onClose, onApply }: JobPreviewPan
             <div className="text-center py-12">
               <p className="text-sm text-[var(--color-text-3)]">No description available</p>
               <a
-                href={job.apply_url}
+                href={safeUrl(job.apply_url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-3 inline-flex items-center gap-1 text-sm text-indigo-500 hover:underline"
@@ -192,7 +193,7 @@ export default function JobPreviewPanel({ job, onClose, onApply }: JobPreviewPan
                 ✓ Applied
               </span>
               <a
-                href={job.apply_url}
+                href={safeUrl(job.apply_url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2.5 rounded-xl border border-[var(--color-border)] hover:border-indigo-400 transition-colors"
@@ -211,7 +212,7 @@ export default function JobPreviewPanel({ job, onClose, onApply }: JobPreviewPan
                 Apply & Track
               </button>
               <a
-                href={job.apply_url}
+                href={safeUrl(job.apply_url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2.5 rounded-xl border border-[var(--color-border)] hover:border-indigo-400 transition-colors"

@@ -16,6 +16,12 @@ _COLS = """
     last_updated, created_at
 """
 
+_ALLOWED_REF_UPDATE_COLS = frozenset({
+    "name", "company", "target_role", "role_at_company", "linkedin_url",
+    "mutual_context", "connection_status", "referral_msg_sent_date",
+    "reply_date", "outcome", "notes",
+})
+
 
 def _row_to_out(row: asyncpg.Record) -> ReferralOut:
     return ReferralOut.model_validate(dict(row))
@@ -95,6 +101,8 @@ async def update_referral(
     sets: list[str] = []
     args: list[object] = []
     for key, value in fields.items():
+        if key not in _ALLOWED_REF_UPDATE_COLS:
+            raise ValueError(f"Unexpected column: {key}")
         sets.append(f"{key} = ${len(args) + 1}")
         if key == "linkedin_url" and value is not None:
             value = str(value)
@@ -130,9 +138,15 @@ async def _set_status(
     ref_id: int,
     user_id: int,
     new_status: str,
-    extra_set: str = "",
+    *,
+    set_msg_date: bool = False,
+    set_reply_date: bool = False,
 ) -> ReferralOut:
-    extra = f", {extra_set}" if extra_set else ""
+    extra = ""
+    if set_msg_date:
+        extra = ", referral_msg_sent_date = CURRENT_DATE"
+    elif set_reply_date:
+        extra = ", reply_date = CURRENT_DATE"
     row = await conn.fetchrow(
         f"UPDATE referral_contacts "
         f"SET connection_status = $1, last_updated = NOW(){extra} "
@@ -150,15 +164,11 @@ async def mark_accepted(conn: asyncpg.Connection, ref_id: int, user_id: int) -> 
 
 
 async def mark_sent(conn: asyncpg.Connection, ref_id: int, user_id: int) -> ReferralOut:
-    return await _set_status(
-        conn, ref_id, user_id, "Msg Sent", "referral_msg_sent_date = CURRENT_DATE"
-    )
+    return await _set_status(conn, ref_id, user_id, "Msg Sent", set_msg_date=True)
 
 
 async def mark_replied(conn: asyncpg.Connection, ref_id: int, user_id: int) -> ReferralOut:
-    return await _set_status(
-        conn, ref_id, user_id, "Replied", "reply_date = CURRENT_DATE"
-    )
+    return await _set_status(conn, ref_id, user_id, "Replied", set_reply_date=True)
 
 
 async def link_application(

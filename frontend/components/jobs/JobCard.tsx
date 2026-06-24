@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Bookmark, BookmarkCheck, Clock, ExternalLink, MapPin } from "lucide-react";
 
 import type { FreshnessColor, JobResult } from "@/types/jobs";
+import { safeUrl } from "@/lib/url-utils";
 
 interface JobCardProps {
   job: JobResult;
@@ -159,7 +160,7 @@ export default function JobCard({ job, onApply, onBookmark, onPreview }: JobCard
       <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
         {applied ? (
           <a
-            href={job.apply_url}
+            href={safeUrl(job.apply_url)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium hover:border-indigo-400 transition-colors"
@@ -175,7 +176,7 @@ export default function JobCard({ job, onApply, onBookmark, onPreview }: JobCard
               Apply & Track
             </button>
             <a
-              href={job.apply_url}
+              href={safeUrl(job.apply_url)}
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 py-2 rounded-lg border border-[var(--color-border)] hover:border-indigo-400 transition-colors"

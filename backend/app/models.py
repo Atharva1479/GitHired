@@ -360,7 +360,7 @@ class DsaProblemCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     source_url: str | None = None
     description: str | None = None
-    user_solution: str | None = None
+    user_solution: str | None = Field(default=None, max_length=10000)
 
 
 class DsaProblemUpdate(BaseModel):
@@ -370,7 +370,7 @@ class DsaProblemUpdate(BaseModel):
     title: str | None = None
     source_url: str | None = None
     description: str | None = None
-    user_solution: str | None = None
+    user_solution: str | None = Field(default=None, max_length=10000)
 
 
 class DsaProblemOut(BaseModel):
@@ -441,7 +441,7 @@ class StartAgentSessionRequest(BaseModel):
     years_exp: str = Field(min_length=1, max_length=20)
     difficulty: str = "medium"
     target_turns: int = Field(default=7, ge=3, le=20)
-    jd_text: str | None = None
+    jd_text: str | None = Field(default=None, max_length=10000)
 
 
 class StartAgentSessionResponse(BaseModel):
@@ -454,7 +454,7 @@ class StartAgentSessionResponse(BaseModel):
 
 
 class SubmitAnswerRequest(BaseModel):
-    answer: str
+    answer: str = Field(max_length=5000)
 
 
 class SubmitAnswerResponse(BaseModel):

@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronRight, ExternalLink, X, Zap } from "lucide-react";
 import { useToast } from "@/app/providers";
 import { useApplyAndTrack, useSimilarJobs } from "@/hooks/useJobs";
 import type { JobResult } from "@/types/jobs";
+import { safeUrl } from "@/lib/url-utils";
 
 interface ApplyModalProps {
   job: JobResult;
@@ -43,7 +44,7 @@ export default function ApplyModal({ job, onClose, onSuccess, onViewJob }: Apply
   const { data: similarJobs } = useSimilarJobs(applied ? job.id : null);
 
   async function handleApply() {
-    window.open(job.apply_url, "_blank", "noopener,noreferrer");
+    window.open(safeUrl(job.apply_url), "_blank", "noopener,noreferrer");
     try {
       const res = await mutateAsync({
         job_cache_id: job.id,

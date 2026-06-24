@@ -37,6 +37,7 @@ async def google_login(request: Request) -> RedirectResponse:
 
 
 @router.get("/google/callback")
+@limiter.limit("20/minute")
 async def google_callback(
     request: Request,
     db: Annotated[asyncpg.Connection, Depends(get_db)],
@@ -97,6 +98,7 @@ async def logout() -> Response:
 
 
 @router.get("/me")
+@limiter.limit("60/minute")
 async def me(
     request: Request,
     db: Annotated[asyncpg.Connection, Depends(get_db)],

@@ -10,7 +10,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from langgraph.types import Command
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.database import pool
 from app.deps import get_db, get_user_id
@@ -33,13 +33,13 @@ router = APIRouter()
 
 
 class StartSessionRequest(BaseModel):
-    topic: str
-    role: str
-    years_exp: str
-    num_questions: int = 7
+    topic: str = Field(max_length=200)
+    role: str = Field(max_length=200)
+    years_exp: str = Field(max_length=20)
+    num_questions: int = Field(default=7, ge=1, le=20)
     difficulty: str = "medium"
-    jd_text: str | None = None
-    custom_questions: list[str] | None = None
+    jd_text: str | None = Field(default=None, max_length=10000)
+    custom_questions: list[str] | None = Field(default=None, max_length=20)
 
     @property
     def duration_min(self) -> int:
@@ -84,8 +84,8 @@ async def start_session(
 
 class SubmitTurnRequest(BaseModel):
     question_index: int
-    question: str
-    user_answer: str
+    question: str = Field(max_length=1000)
+    user_answer: str = Field(max_length=5000)
 
 
 @router.post("/sessions/{session_id}/turns")

@@ -34,6 +34,8 @@ async def upload_resume(
     body = await file.read(settings.max_upload_bytes + 1)
     if len(body) > settings.max_upload_bytes:
         raise HTTPException(413, f"Max {settings.max_upload_bytes} bytes")
+    if not body.startswith(b"%PDF"):
+        raise HTTPException(415, "Only PDF files are accepted")
 
     parsed_text = await extract_text_from_bytes(body, file.filename or "resume.pdf")
     original = (Path(file.filename or "resume.pdf").name[:200]) if file.filename else "resume.pdf"

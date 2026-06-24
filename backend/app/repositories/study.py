@@ -48,6 +48,12 @@ _TOPIC_COLS = (
     "revision_count, last_revised_at, position, created_at, last_updated"
 )
 
+_ALLOWED_SECTION_UPDATE_COLS = frozenset({"name", "icon", "position"})
+_ALLOWED_SUBSECTION_UPDATE_COLS = frozenset({"name", "position", "section_id"})
+_ALLOWED_TOPIC_UPDATE_COLS = frozenset({
+    "title", "notes", "kind", "status", "tags", "position", "subsection_id",
+})
+
 
 # ─────────────────────────  sections  ────────────────────────────────
 
@@ -108,6 +114,9 @@ async def update_section(
     fields = patch.model_dump(exclude_unset=True)
     if not fields:
         return await get_section(conn, section_id, user_id)
+    for key in fields:
+        if key not in _ALLOWED_SECTION_UPDATE_COLS:
+            raise ValueError(f"Unexpected column: {key}")
     sets = [f"{k} = ${i + 1}" for i, k in enumerate(fields)]
     args = list(fields.values())
     sets.append("last_updated = NOW()")
@@ -213,6 +222,9 @@ async def update_subsection(
     new_section_id = fields.get("section_id")
     if new_section_id is not None:
         await get_section(conn, new_section_id, user_id)
+    for key in fields:
+        if key not in _ALLOWED_SUBSECTION_UPDATE_COLS:
+            raise ValueError(f"Unexpected column: {key}")
     sets = [f"{k} = ${i + 1}" for i, k in enumerate(fields)]
     args = list(fields.values())
     sets.append("last_updated = NOW()")
@@ -304,6 +316,9 @@ async def update_topic(
     new_sub = fields.get("subsection_id")
     if new_sub is not None:
         await get_subsection(conn, new_sub, user_id)
+    for key in fields:
+        if key not in _ALLOWED_TOPIC_UPDATE_COLS:
+            raise ValueError(f"Unexpected column: {key}")
     sets = [f"{k} = ${i + 1}" for i, k in enumerate(fields)]
     args = list(fields.values())
     sets.append("last_updated = NOW()")

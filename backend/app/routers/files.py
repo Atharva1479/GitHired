@@ -56,6 +56,12 @@ async def upload_file(
             content=f'{{"type":"too_large","title":"File too large","detail":"max {settings.max_upload_bytes} bytes","status":413}}',
             media_type="application/json",
         )
+    if not body.startswith(b"%PDF"):
+        return Response(
+            status_code=415,
+            content='{"type":"unsupported_media","title":"PDF only","detail":"file content is not a valid PDF","status":415}',
+            media_type="application/json",
+        )
 
     path = _file_path(user_id, app_id, kind)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -167,7 +167,8 @@ async def plan_interview_topics(
     jd_text: str | None = None,
 ) -> dict[str, Any]:
     """Generate an interview plan: topic clusters + opening question."""
-    jd_section = f"\n<job_description>\n{jd_text[:1500]}\n</job_description>" if jd_text else ""
+    safe_jd = jd_text.replace("</job_description>", " ").replace("<job_description>", " ")[:1500] if jd_text else None
+    jd_section = f"\n<job_description>\n{safe_jd}\n</job_description>" if safe_jd else ""
     exp_note = _exp_calibration(years_exp)
     exp_line = f"\nExperience calibration: {exp_note}" if exp_note else ""
 
@@ -309,14 +310,14 @@ async def generate_questions(
 - Cover: load balancing, database selection, caching strategies, API contracts, fault tolerance, consistency vs availability.
 - Progress from a single service to full distributed system scope.""",
 
-            "JD Based": f"""\
-- Derive every question directly from the skills, tools, and responsibilities in the job description below.
-- Prioritize the most prominent requirements. Mix technical competency checks with situational/behavioral questions.
-- Do not ask questions that could apply to any generic job.
-
-<job_description>
-{(jd_text or "")[:2000]}
-</job_description>""",
+            "JD Based": (
+                "- Derive every question directly from the skills, tools, and responsibilities in the job description below.\n"
+                "- Prioritize the most prominent requirements. Mix technical competency checks with situational/behavioral questions.\n"
+                "- Do not ask questions that could apply to any generic job.\n\n"
+                "<job_description>\n"
+                + (jd_text or "").replace("</job_description>", " ").replace("<job_description>", " ")[:2000]
+                + "\n</job_description>"
+            ),
         }
         instructions = style_instructions.get(topic, "- Ask relevant, progressively challenging questions.")
         interview_context = f"{topic} interview for a {role} with {years_exp} years of experience"
@@ -409,6 +410,7 @@ async def evaluate_turn(
         )
         return {"ideal_answer": ideal, "score": score, "feedback": feedback}
 
+    safe_answer = trimmed.replace("</candidate_answer>", " ").replace("<candidate_answer>", " ")
     prompt = f"""Output JSON ONLY. No markdown, no commentary.
 
 You are a strict technical interviewer evaluating a candidate response in a {topic} interview for a {role} role.
@@ -418,7 +420,7 @@ You are a strict technical interviewer evaluating a candidate response in a {top
 </question>
 
 <candidate_answer>
-{trimmed}
+{safe_answer}
 </candidate_answer>
 
 <task>

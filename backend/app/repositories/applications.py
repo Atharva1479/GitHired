@@ -12,6 +12,12 @@ _COLS = """
     jd_text, jd_file_name, resume_file_name, cover_letter_file_name
 """
 
+_ALLOWED_APP_UPDATE_COLS = frozenset({
+    "company", "role", "source", "applied_date", "status", "notes",
+    "fit_score", "salary_discussed", "contact_name", "contact_linkedin",
+    "jd_url", "jd_text",
+})
+
 
 def _row_to_out(row: asyncpg.Record) -> ApplicationOut:
     return ApplicationOut.model_validate(dict(row))
@@ -108,6 +114,8 @@ async def update_application(
     sets: list[str] = []
     args: list[object] = []
     for key, value in fields.items():
+        if key not in _ALLOWED_APP_UPDATE_COLS:
+            raise ValueError(f"Unexpected column: {key}")
         sets.append(f"{key} = ${len(args) + 1}")
         if key in {"jd_url", "contact_linkedin"} and value is not None:
             value = str(value)
