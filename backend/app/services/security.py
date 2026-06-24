@@ -1,6 +1,8 @@
 """Security middleware + rate limiter."""
 from __future__ import annotations
 
+import logging as _logging
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -12,7 +14,23 @@ from app.config import settings
 # --- Rate limiter ---------------------------------------------------------
 # Keyed by client IP. For SaaS behind a reverse proxy, ensure the proxy sets
 # X-Forwarded-For correctly and `get_remote_address` picks it up.
-limiter = Limiter(key_func=get_remote_address, default_limits=[])
+#
+# When REDIS_URL is set, counters are stored in Redis so all replicas share
+# the same rate-limit state. Without it, each process tracks independently —
+# effective limit becomes N × configured limit behind a load balancer.
+if settings.redis_url:
+    limiter = Limiter(
+        key_func=get_remote_address,
+        default_limits=[],
+        storage_uri=settings.redis_url,
+    )
+else:
+    if settings.environment == "production":
+        _logging.getLogger("security").warning(
+            "REDIS_URL is not set — rate limits are per-process only and will be "
+            "ineffective behind multiple replicas. Set REDIS_URL to enable distributed limiting."
+        )
+    limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
 
 # --- Security headers -----------------------------------------------------

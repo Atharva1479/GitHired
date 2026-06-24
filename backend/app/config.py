@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import PostgresDsn, SecretStr
+from pydantic import PostgresDsn, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     sentry_traces_sample_rate: float = 0.1
     metrics_enabled: bool = True
     auth_rate_limit_per_minute: int = 10
+    redis_url: str | None = None  # e.g. "redis://redis:6379/0" — enables distributed rate limiting
 
     # Pilot — voice AI co-pilot (M8 Phase 3)
     pilot_enabled: bool = True
@@ -123,6 +124,18 @@ class Settings(BaseSettings):
 
     # UTC hour for the daily job-alert email (default 8 = 8 AM UTC = 1:30 PM IST)
     job_alert_cron_hour: int = 8
+
+    @model_validator(mode="after")
+    def _production_secret_guard(self) -> "Settings":
+        if (
+            self.environment == "production"
+            and self.session_secret.get_secret_value() == "dev-only-change-me-please-rotate"
+        ):
+            raise ValueError(
+                "SESSION_SECRET must be changed from the default value in production. "
+                "Set SESSION_SECRET to a long random string in your environment or .env file."
+            )
+        return self
 
 
 settings = Settings()
