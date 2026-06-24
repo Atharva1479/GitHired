@@ -1,20 +1,20 @@
 """Pilot — voice/chat co-pilot endpoints."""
 import asyncio
 import json
-import logging
 from typing import Annotated, AsyncIterator
 
 import asyncpg
+import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-log = logging.getLogger("pilot.router")
+log = structlog.get_logger("pilot.router")
 
 from app.config import settings
 from app.database import pool
 from app.deps import get_db, get_user_id
-from app.services import pilot, pilot_agent
+from app.services import pilot, pilot_graph
 from app.services.security import limiter
 from app.services.stt import SttUnavailable, transcribe
 from app.services.tts import TtsUnavailable, synthesize
@@ -102,7 +102,7 @@ async def chat(
 ) -> ChatResponse:
     """Legacy: kept for back-compat with the M8 client; routes through the agent."""
     _ensure_enabled()
-    result = await pilot_agent.run_turn(
+    result = await pilot_graph.run_turn(
         conn, user_id, body.message,
         [t.model_dump() for t in body.history],
     )
@@ -127,7 +127,7 @@ async def agent_turn(
     answer. Phase 1: read-only tools.
     """
     _ensure_enabled()
-    result = await pilot_agent.run_turn(
+    result = await pilot_graph.run_turn(
         conn, user_id, body.message,
         [t.model_dump() for t in body.history],
     )
@@ -178,7 +178,7 @@ async def agent_stream(
     async def event_stream() -> AsyncIterator[bytes]:
         async with pool().acquire() as conn:
             try:
-                result = await pilot_agent.run_turn(
+                result = await pilot_graph.run_turn(
                     conn, user_id, message, history_payload,
                 )
             except Exception:  # noqa: BLE001
@@ -187,7 +187,7 @@ async def agent_stream(
                 # here is a genuine bug or an asyncpg/network glitch. Log
                 # the traceback, but never leak its repr to the client.
                 log.exception(
-                    "pilot.router.agent_stream_failed user_id=%s", user_id
+                    "pilot.router.agent_stream_failed", user_id=user_id
                 )
                 yield _sse({
                     "type": "error",

@@ -44,6 +44,36 @@ async def insert_if_absent(
     return 0
 
 
+async def insert_many(
+    conn: asyncpg.Connection,
+    user_id: int,
+    candidates: list[tuple[str, str, int | None, str, str]],
+    fired_on_date: date,
+) -> int:
+    """Batch-insert nudge candidates in a single query. Returns count of new rows inserted."""
+    if not candidates:
+        return []
+    types = [c[0] for c in candidates]
+    ref_types = [c[1] for c in candidates]
+    ref_ids = [c[2] for c in candidates]
+    severities = [c[3] for c in candidates]
+    messages = [c[4] for c in candidates]
+    rows = await conn.fetch(
+        """
+        INSERT INTO nudges (user_id, type, reference_type, reference_id, severity, message, fired_on_date)
+        SELECT $1, t, rt, ri, sev, msg, $7
+        FROM UNNEST($2::text[], $3::text[], $4::int[], $5::text[], $6::text[])
+          AS u(t, rt, ri, sev, msg)
+        ON CONFLICT DO NOTHING
+        RETURNING type, severity
+        """,
+        user_id, types, ref_types, ref_ids, severities, messages, fired_on_date,
+    )
+    for r in rows:
+        metrics.record_nudge(r["type"], r["severity"])
+    return len(rows)
+
+
 async def list_today(
     conn: asyncpg.Connection, user_id: int, today: date
 ) -> list[NudgeOut]:

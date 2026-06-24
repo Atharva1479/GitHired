@@ -7,14 +7,14 @@ Uses Resend REST API via httpx (already a project dependency).
 """
 import datetime as dt
 import html
-import logging
 
 import asyncpg
 import httpx
+import structlog
 
 from app.config import settings
 
-log = logging.getLogger("email_digest")
+log = structlog.get_logger("email_digest")
 
 _RESEND_SEND_URL = "https://api.resend.com/emails"
 
@@ -43,20 +43,20 @@ async def send_weekly_digest_for_all() -> None:
             ORDER BY id
             """
         )
-        log.info("digest.starting user_count=%d", len(users))
+        log.info("digest.starting", user_count=len(users))
         for user in users:
             try:
                 payload = await _collect_user_data(conn, dict(user))
                 user_payloads.append(payload)
             except Exception as exc:  # noqa: BLE001
-                log.exception("digest.collect_failed user_id=%s error=%s", user["id"], exc)
+                log.exception("digest.collect_failed", user_id=user["id"], error=str(exc))
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         for payload in user_payloads:
             try:
                 await _send_email(client, api_key, payload)
             except Exception as exc:  # noqa: BLE001
-                log.exception("digest.send_failed user_id=%s error=%s", payload["user_id"], exc)
+                log.exception("digest.send_failed", user_id=payload["user_id"], error=str(exc))
     log.info("digest.done")
 
 
@@ -73,7 +73,7 @@ async def send_digest_for_user(user_id: int) -> None:
             user_id,
         )
         if not user or not user["email"]:
-            log.warning("digest.skipped user_id=%s no email", user_id)
+            log.warning("digest.skipped", user_id=user_id, reason="no_email")
             return
         payload = await _collect_user_data(conn, dict(user))
 
@@ -212,13 +212,15 @@ async def _send_email(client: httpx.AsyncClient, api_key: str, payload: dict) ->
     )
     if resp.status_code >= 400:
         log.error(
-            "digest.resend_error user_id=%s status=%d body=%s",
-            user_id, resp.status_code, resp.text[:200],
+            "digest.resend_error",
+            user_id=user_id,
+            status=resp.status_code,
+            body=resp.text[:200],
         )
     else:
         local, domain = email.split("@", 1)
         masked = local[:2] + "***@" + domain
-        log.info("digest.sent user_id=%s email=%s", user_id, masked)
+        log.info("digest.sent", user_id=user_id, email=masked)
 
 
 def _build_html(p: dict) -> str:

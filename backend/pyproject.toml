@@ -60,7 +60,7 @@ select = ["E", "F", "I", "B", "UP", "RUF"]
 
 [tool.mypy]
 strict = true
-files = ["app/services", "app/repositories"]
+files = ["app/services", "app/repositories", "app/routers", "app/models.py", "app/main.py"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

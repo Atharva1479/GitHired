@@ -1,10 +1,11 @@
-import logging
 import re
 from typing import Any
 
+import structlog
+
 _model: Any = None
 _MODEL_NAME = "all-MiniLM-L6-v2"
-log = logging.getLogger("ats.semantic")
+log = structlog.get_logger("ats.semantic")
 
 
 def get_model() -> Any:
@@ -14,9 +15,9 @@ def get_model() -> Any:
             from sentence_transformers import SentenceTransformer
 
             _model = SentenceTransformer(_MODEL_NAME)
-            log.info("semantic_scorer: model loaded — %s", _MODEL_NAME)
+            log.info("semantic_scorer.model_loaded", model=_MODEL_NAME)
         except Exception as e:
-            log.warning("semantic_scorer: model unavailable — %s", str(e))
+            log.warning("semantic_scorer.model_unavailable", error=str(e))
     return _model
 
 
@@ -76,5 +77,5 @@ def semantic_sentence_score(jd_parsed: dict, resume_parsed: dict) -> dict:
         score = round(min((avg_sim / 0.65) * 100, 100), 1)
         return {"score": score, "top_matches": top_matches[:6], "fallback": False}
     except Exception as e:
-        log.warning("semantic_scorer: inference error — %s", str(e))
+        log.warning("semantic_scorer.inference_error", error=str(e))
         return {"score": 65.0, "top_matches": [], "fallback": True}

@@ -110,12 +110,12 @@ async def trigger_digest(
     if settings.environment == "production":
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Not available in production")
-    import logging
-    _log = logging.getLogger("analytics")
+    import structlog as _structlog
+    _log = _structlog.get_logger("analytics")
     task = asyncio.create_task(send_digest_for_user(user_id))
     task.add_done_callback(
-        lambda t: t.exception() and _log.exception(
-            "digest.trigger_failed user_id=%d", user_id, exc_info=t.exception()
+        lambda t: t.exception() and _log.error(
+            "digest.trigger_failed", user_id=user_id, error=str(t.exception())
         )
     )
     return {"status": "queued"}

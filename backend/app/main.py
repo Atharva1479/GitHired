@@ -212,7 +212,7 @@ async def healthz() -> dict[str, bool]:
 @app.get("/readyz", tags=["Health"])
 async def readyz() -> dict[str, bool]:
     async with pool().acquire() as conn:
-        await conn.fetchval("SELECT 1")
+        await asyncio.wait_for(conn.fetchval("SELECT 1"), timeout=2.0)
     return {"ok": True}
 
 

@@ -1,7 +1,7 @@
 import asyncio
 import datetime as dt
-import logging
 
+import structlog
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -11,7 +11,7 @@ from app.services import gamify
 from app.services.nudge_engine import run_all_checks
 from app.services.email_digest import send_weekly_digest_for_all
 
-log = logging.getLogger("scheduler")
+log = structlog.get_logger("scheduler")
 _scheduler: BackgroundScheduler | None = None
 
 
@@ -21,7 +21,7 @@ def _job_alerts_sync() -> None:
     try:
         asyncio.run(_job_alerts_async())
     except Exception as exc:
-        log.exception("scheduler.job_alerts_failed: %s", exc)
+        log.exception("scheduler.job_alerts_failed", error=str(exc))
 
 
 async def _job_alerts_async() -> None:
@@ -119,14 +119,14 @@ def start_scheduler() -> None:
         misfire_grace_time=3600,
     )
     _scheduler.start()
-    log.info("scheduler.started cron_hour=%s", settings.nudge_cron_hour)
+    log.info("scheduler.started", cron_hour=settings.nudge_cron_hour)
 
 
 def stop_scheduler() -> None:
     global _scheduler
     if _scheduler is None:
         return
-    _scheduler.shutdown(wait=False)
+    _scheduler.shutdown(wait=True)
     _scheduler = None
 
 
@@ -134,7 +134,7 @@ def _run_for_all_users_sync() -> None:
     try:
         asyncio.run(_run_for_all_users_async())
     except Exception as e:  # noqa: BLE001
-        log.exception("scheduler.run_failed: %s", e)
+        log.exception("scheduler.run_failed", error=str(e))
 
 
 async def _run_for_all_users_async() -> None:
@@ -145,34 +145,34 @@ async def _run_for_all_users_async() -> None:
         )
         for row in user_rows:
             n = await run_all_checks(conn, user_id=row["id"], today=today)
-            log.info("scheduler.run user_id=%s inserted=%s", row["id"], n)
+            log.info("scheduler.run", user_id=row["id"], inserted=n)
 
 
 def _rotate_quests_sync() -> None:
     try:
         asyncio.run(_rotate_quests_async())
     except Exception as e:  # noqa: BLE001
-        log.exception("scheduler.rotate_quests_failed: %s", e)
+        log.exception("scheduler.rotate_quests_failed", error=str(e))
 
 
 async def _rotate_quests_async() -> None:
     async with pool().acquire() as conn:
         n = await gamify.rotate_quests_for_all(conn)
-        log.info("scheduler.rotate_quests users=%s", n)
+        log.info("scheduler.rotate_quests", users=n)
 
 
 def _send_digest_sync() -> None:
     try:
         asyncio.run(send_weekly_digest_for_all())
     except Exception as e:  # noqa: BLE001
-        log.exception("scheduler.digest_failed: %s", e)
+        log.exception("scheduler.digest_failed", error=str(e))
 
 
 def _auto_ghost_sync() -> None:
     try:
         asyncio.run(_auto_ghost_async())
     except Exception as e:  # noqa: BLE001
-        log.exception("scheduler.auto_ghost_failed: %s", e)
+        log.exception("scheduler.auto_ghost_failed", error=str(e))
 
 
 async def _auto_ghost_async() -> None:
@@ -187,4 +187,4 @@ async def _auto_ghost_async() -> None:
             """,
         )
         count = int(result.split()[-1]) if result else 0
-        log.info("scheduler.auto_ghost updated=%s", count)
+        log.info("scheduler.auto_ghost", updated=count)

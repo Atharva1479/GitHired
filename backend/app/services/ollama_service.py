@@ -14,15 +14,16 @@ This module is intentionally thin:
 """
 from __future__ import annotations
 
-import logging
 from typing import Any
+
+import structlog
 
 import httpx
 from langsmith import traceable
 
 from app.config import settings
 
-log = logging.getLogger("pilot.ollama")
+log = structlog.get_logger("pilot.ollama")
 
 
 class OllamaUnavailable(Exception):
@@ -209,7 +210,7 @@ async def prewarm() -> None:
             url,
         )
     except Exception as e:  # noqa: BLE001
-        log.warning("ollama.prewarm.failed error=%s", str(e)[:200])
+        log.warning("ollama.prewarm.failed", error=str(e)[:200])
 
 
 async def unload() -> None:
@@ -230,6 +231,6 @@ async def unload() -> None:
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             await client.post(url, json=payload)
-        log.info("ollama.unload.ok model=%s", settings.ollama_model)
+        log.info("ollama.unload.ok", model=settings.ollama_model)
     except Exception as e:  # noqa: BLE001
-        log.warning("ollama.unload.failed error=%s", str(e)[:200])
+        log.warning("ollama.unload.failed", error=str(e)[:200])

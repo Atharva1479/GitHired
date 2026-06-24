@@ -229,19 +229,3 @@ async def _build_brief_context(user_id: int, conn: asyncpg.Connection) -> str:
         f"- Today's date: {today}\n"
         f"- User id (internal): {user_id}{pending_block}"
     )
-
-
-# ---------------------------------------------------------------------------
-# Public entry point — delegates to LangGraph implementation
-# ---------------------------------------------------------------------------
-
-
-async def run_turn(
-    conn: asyncpg.Connection,
-    user_id: int,
-    message: str,
-    history: list[dict[str, Any]] | None = None,
-) -> AgentTurnResult:
-    """Delegates to the LangGraph implementation in pilot_graph."""
-    from app.services import pilot_graph  # lazy import avoids circular dependency
-    return await pilot_graph.run_turn(conn, user_id, message, history)

@@ -158,16 +158,9 @@ async def run_all_checks(
         candidates.extend(evaluate_referral_rules(ref, today))
     candidates.extend(evaluate_weekly_volume(weekly_count))
 
-    inserted = 0
-    for c in candidates:
-        inserted += await nudges_repo.insert_if_absent(
-            conn, user_id,
-            type_=c.type,
-            reference_type=c.reference_type,
-            reference_id=c.reference_id,
-            severity=c.severity,
-            message=c.message,
-            fired_on_date=today,
-        )
-    return inserted
+    batch = [
+        (c.type, c.reference_type, c.reference_id, c.severity, c.message)
+        for c in candidates
+    ]
+    return await nudges_repo.insert_many(conn, user_id, batch, today)
 

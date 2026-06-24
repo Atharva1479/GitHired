@@ -1,7 +1,8 @@
 import asyncio
 import datetime
-import logging
 import re
+
+import structlog
 
 from . import (
     esco_loader,
@@ -28,7 +29,7 @@ from app.services.ats.skill_experience_scorer import score_skill_experience
 from app.services.ats.readability_scorer import score_readability
 from app.services.ats.page_density_scorer import score_page_density
 
-log = logging.getLogger("ats.scorer")
+log = structlog.get_logger("ats.scorer")
 
 # 5-category model: mirrors what real ATS filters (Workday/Taleo/Greenhouse) actually check.
 # Human-recruiter signals (bullets, readability, career gaps) are computed for feedback

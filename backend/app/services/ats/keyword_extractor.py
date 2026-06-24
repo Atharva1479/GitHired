@@ -1,7 +1,7 @@
-import logging
+import structlog
 from .esco_loader import get_all_skills, get_synonym_map
 
-log = logging.getLogger("ats.keyword_extractor")
+log = structlog.get_logger("ats.keyword_extractor")
 
 
 def extract_keywords(jd_parsed: dict) -> dict:
