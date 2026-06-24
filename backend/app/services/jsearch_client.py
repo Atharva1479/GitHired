@@ -95,7 +95,7 @@ async def search(
     if experience and experience in _EXP_MAP:
         params["job_requirements"] = _EXP_MAP[experience]
 
-    headers = {**_HEADERS, "X-RapidAPI-Key": settings.jsearch_api_key}
+    headers = {**_HEADERS, "X-RapidAPI-Key": settings.jsearch_api_key.get_secret_value()}
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:

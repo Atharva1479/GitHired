@@ -312,7 +312,7 @@ class StudyAISectionPreview(BaseModel):
 
 
 class StudyGenerateRequest(BaseModel):
-    role: str
+    role: str = Field(max_length=200)
     target_companies: list[str] | None = None
     existing_sections: list[str] | None = None
 
@@ -323,7 +323,7 @@ class StudyGenerateResponse(BaseModel):
 
 class StudyGenerateTopicsRequest(BaseModel):
     count: int = Field(default=10, ge=1, le=30)
-    hint: str | None = None
+    hint: str | None = Field(default=None, max_length=500)
 
 
 class StudyGenerateTopicsResponse(BaseModel):

@@ -80,6 +80,8 @@ async def analyze(
         raise HTTPException(400, "Provide either a file or resume_text")
     if not job_description.strip():
         raise HTTPException(400, "job_description is required")
+    if len(job_description) > 50_000:
+        raise HTTPException(400, "job_description too long")
 
     if file:
         content = await file.read()

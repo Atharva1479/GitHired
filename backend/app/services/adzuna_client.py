@@ -70,7 +70,7 @@ async def search(
 
     params: dict[str, Any] = {
         "app_id": settings.adzuna_app_id,
-        "app_key": settings.adzuna_api_key,
+        "app_key": settings.adzuna_api_key.get_secret_value(),
         "results_per_page": results_per_page,
         "what": query,
         "max_days_old": max_days_old,

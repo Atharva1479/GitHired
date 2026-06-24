@@ -103,11 +103,11 @@ class Settings(BaseSettings):
 
     # ── Job Discovery ─────────────────────────────────────────────────────────
     # JSearch on RapidAPI: https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
-    jsearch_api_key: str | None = None
+    jsearch_api_key: SecretStr | None = None
 
     # Adzuna free job API: https://developer.adzuna.com/
     adzuna_app_id: str | None = None
-    adzuna_api_key: str | None = None
+    adzuna_api_key: SecretStr | None = None
 
     # Jooble job aggregator: https://jooble.org/api/about
     # Aggregates from Naukri, LinkedIn India, Monster India, TimesJobs, Shine, Foundit.

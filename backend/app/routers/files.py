@@ -22,8 +22,10 @@ _KIND_TO_ATTR = {
 
 
 def _file_path(user_id: int, app_id: int, kind: FileKind) -> Path:
-    base: Path = settings.upload_dir
-    return base / str(user_id) / str(app_id) / f"{kind}.pdf"
+    base: Path = settings.upload_dir.resolve()
+    path = base / str(user_id) / str(app_id) / f"{kind}.pdf"
+    assert path.resolve().is_relative_to(base), "path traversal detected"
+    return path
 
 
 def _safe_filename(raw: str) -> str:

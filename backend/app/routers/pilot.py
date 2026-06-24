@@ -5,7 +5,7 @@ from typing import Annotated, AsyncIterator
 
 import asyncpg
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -252,7 +252,7 @@ async def history(
     request: Request,
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     user_id: Annotated[int, Depends(get_user_id)],
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> HistoryResponse:
     """Recent voice_turns for the signed-in user.
 
