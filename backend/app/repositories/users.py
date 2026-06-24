@@ -76,9 +76,14 @@ async def upsert_google_user(
     if claimed:
         return dict(claimed)
 
+    # ON CONFLICT handles the race where two concurrent callbacks for the same
+    # google_sub both slip past the SELECT above and both attempt the INSERT.
     row = await db.fetchrow(
         "INSERT INTO users (email, display_name, google_sub, picture_url) "
         "VALUES ($1, $2, $3, $4) "
+        "ON CONFLICT (google_sub) WHERE google_sub IS NOT NULL "
+        "DO UPDATE SET email = EXCLUDED.email, display_name = EXCLUDED.display_name, "
+        "picture_url = EXCLUDED.picture_url "
         "RETURNING id, email, display_name, picture_url, google_sub",
         email,
         name,

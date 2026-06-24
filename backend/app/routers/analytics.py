@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.deps import get_db, get_user_id
+from app.repositories import analytics as analytics_repo
 from app.services.email_digest import send_digest_for_user, send_weekly_digest_for_all
 
 router = APIRouter()
@@ -53,21 +54,7 @@ async def analytics_stats(
     conn: asyncpg.Connection = Depends(get_db),
     user_id: int = Depends(get_user_id),
 ) -> AnalyticsStats:
-    # --- Funnel ---
-    funnel_row = await conn.fetchrow(
-        """
-        SELECT
-          COUNT(*) AS applied,
-          COUNT(*) FILTER (WHERE status IN ('Screening','Interview','Offer','Rejected','Ghosted')) AS screened,
-          COUNT(*) FILTER (WHERE status IN ('Interview','Offer')) AS interviewed,
-          COUNT(*) FILTER (WHERE status = 'Offer') AS offered,
-          COUNT(*) FILTER (WHERE status IN ('Offer','Rejected','Ghosted')) AS closed,
-          COUNT(*) FILTER (WHERE status = 'Ghosted') AS ghosted
-        FROM applications
-        WHERE user_id = $1 AND deleted_at IS NULL
-        """,
-        user_id,
-    )
+    funnel_row = await analytics_repo.get_funnel_row(conn, user_id)
     total = int(funnel_row["applied"])
     closed = int(funnel_row["closed"])
     ghosted = int(funnel_row["ghosted"])
@@ -84,21 +71,7 @@ async def analytics_stats(
         offer_rate=offer_rate,
     )
 
-    # --- By Source ---
-    source_rows = await conn.fetch(
-        """
-        SELECT
-          source,
-          COUNT(*) AS total,
-          COUNT(*) FILTER (WHERE status IN ('Offer','Rejected','Ghosted')) AS closed,
-          COUNT(*) FILTER (WHERE status = 'Ghosted') AS ghosted
-        FROM applications
-        WHERE user_id = $1 AND deleted_at IS NULL
-        GROUP BY source
-        ORDER BY total DESC
-        """,
-        user_id,
-    )
+    source_rows = await analytics_repo.get_source_rows(conn, user_id)
     by_source = []
     for r in source_rows:
         s_closed = int(r["closed"])
@@ -108,39 +81,14 @@ async def analytics_stats(
             SourceStat(source=r["source"], count=int(r["total"]), response_rate=s_rate)
         )
 
-    # --- Weekly Trend (last 8 weeks) ---
     eight_weeks_ago = dt.date.today() - dt.timedelta(weeks=8)
-    trend_rows = await conn.fetch(
-        """
-        SELECT
-          date_trunc('week', applied_date)::date AS week_start,
-          COUNT(*) AS cnt
-        FROM applications
-        WHERE user_id = $1
-          AND deleted_at IS NULL
-          AND applied_date >= $2
-        GROUP BY week_start
-        ORDER BY week_start
-        """,
-        user_id,
-        eight_weeks_ago,
-    )
+    trend_rows = await analytics_repo.get_weekly_trend_rows(conn, user_id, eight_weeks_ago)
     weekly_trend = [
         WeekPoint(week_start=str(r["week_start"]), count=int(r["cnt"]))
         for r in trend_rows
     ]
 
-    # --- By Status ---
-    status_rows = await conn.fetch(
-        """
-        SELECT status, COUNT(*) AS cnt
-        FROM applications
-        WHERE user_id = $1 AND deleted_at IS NULL
-        GROUP BY status
-        ORDER BY cnt DESC
-        """,
-        user_id,
-    )
+    status_rows = await analytics_repo.get_status_rows(conn, user_id)
     by_status = [
         StatusStat(status=r["status"], count=int(r["cnt"]))
         for r in status_rows

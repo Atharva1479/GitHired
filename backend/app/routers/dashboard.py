@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from app.deps import get_db, get_user_id
+from app.repositories import dashboard as dashboard_repo
 
 router = APIRouter()
 
@@ -48,59 +49,19 @@ async def stats(
     conn: asyncpg.Connection = Depends(get_db),
     user_id: int = Depends(get_user_id),
 ) -> DashboardStats:
-    app_row = await conn.fetchrow(
-        """
-        SELECT
-          COUNT(*) AS total,
-          COUNT(*) FILTER (WHERE status = 'Applied') AS applied,
-          COUNT(*) FILTER (WHERE status IN ('Applied','Screening','Interview')) AS in_progress,
-          COUNT(*) FILTER (WHERE status = 'Offer') AS offers,
-          COUNT(*) FILTER (WHERE status IN ('Offer','Rejected','Ghosted')) AS closed,
-          COUNT(*) FILTER (WHERE status = 'Ghosted') AS ghosted
-        FROM applications
-        WHERE user_id = $1 AND deleted_at IS NULL
-        """,
-        user_id,
-    )
+    app_row = await dashboard_repo.get_app_stats_row(conn, user_id)
     a_total = int(app_row["total"])
     a_closed = int(app_row["closed"])
     a_ghosted = int(app_row["ghosted"])
-    a_response = (
-        round(((a_closed - a_ghosted) / a_closed) * 100) if a_closed else 0
-    )
+    a_response = round(((a_closed - a_ghosted) / a_closed) * 100) if a_closed else 0
 
-    ref_row = await conn.fetchrow(
-        """
-        SELECT
-          COUNT(*) AS total,
-          COUNT(*) FILTER (WHERE connection_status IN
-            ('Request Sent','Accepted','Msg Sent')) AS in_progress,
-          COUNT(*) FILTER (WHERE connection_status = 'Referred') AS referred,
-          COUNT(*) FILTER (WHERE connection_status IN ('Referred','Dropped')) AS closed
-        FROM referral_contacts
-        WHERE user_id = $1 AND deleted_at IS NULL
-        """,
-        user_id,
-    )
+    ref_row = await dashboard_repo.get_referral_stats_row(conn, user_id)
     r_total = int(ref_row["total"])
     r_referred = int(ref_row["referred"])
     r_closed = int(ref_row["closed"])
     r_conv = round((r_referred / r_closed) * 100) if r_closed else 0
 
-    nudge_row = await conn.fetchrow(
-        """
-        SELECT
-          COUNT(*) AS today,
-          COUNT(*) FILTER (WHERE severity = 'overdue') AS overdue
-        FROM nudges
-        WHERE user_id = $1
-          AND deleted_at IS NULL
-          AND read_at IS NULL AND acted_at IS NULL
-          AND (snoozed_until IS NULL OR snoozed_until < $2)
-          AND fired_on_date <= $2
-        """,
-        user_id, date.today(),
-    )
+    nudge_row = await dashboard_repo.get_nudge_stats_row(conn, user_id, date.today())
 
     return DashboardStats(
         applications=ApplicationsStats(
@@ -129,28 +90,5 @@ async def activity(
     conn: asyncpg.Connection = Depends(get_db),
     user_id: int = Depends(get_user_id),
 ) -> list[ActivityItem]:
-    import json
-
-    rows = await conn.fetch(
-        """
-        SELECT id, event_type, payload, occurred_at
-        FROM events
-        WHERE user_id = $1 AND deleted_at IS NULL
-        ORDER BY occurred_at DESC LIMIT $2
-        """,
-        user_id, limit,
-    )
-    out: list[ActivityItem] = []
-    for r in rows:
-        payload = r["payload"]
-        if isinstance(payload, str):
-            payload = json.loads(payload)
-        out.append(
-            ActivityItem(
-                id=r["id"],
-                event_type=r["event_type"],
-                payload=payload or {},
-                occurred_at=r["occurred_at"],
-            )
-        )
-    return out
+    rows = await dashboard_repo.get_activity_rows(conn, user_id, limit)
+    return [ActivityItem(**r) for r in rows]

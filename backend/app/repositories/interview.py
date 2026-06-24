@@ -101,7 +101,7 @@ async def get_session(
     user_id: int,
 ) -> InterviewSession | None:
     row = await conn.fetchrow(
-        "SELECT * FROM interview_sessions WHERE id = $1 AND user_id = $2",
+        "SELECT * FROM interview_sessions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
         session_id, user_id,
     )
     return InterviewSession.model_validate(dict(row)) if row else None
@@ -127,7 +127,7 @@ async def save_turn(
 
 async def end_session(conn: asyncpg.Connection, session_id: int) -> None:
     await conn.execute(
-        "UPDATE interview_sessions SET status = 'ended', ended_at = now() WHERE id = $1",
+        "UPDATE interview_sessions SET status = 'ended', ended_at = now() WHERE id = $1 AND deleted_at IS NULL",
         session_id,
     )
 

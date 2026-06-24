@@ -37,6 +37,7 @@ from app.services.observability import (
     configure_logging,
     configure_sentry,
 )
+from app.services.ats.word_semantic import unload as word2vec_unload
 from app.services.ollama_service import prewarm as ollama_prewarm, unload as ollama_unload
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.security import SecurityHeadersMiddleware, limiter
@@ -121,6 +122,7 @@ async def lifespan(_: FastAPI):
     if not prewarm_task.done():
         prewarm_task.cancel()
     await ollama_unload()
+    await asyncio.to_thread(word2vec_unload)
     stop_scheduler()
     await close_db()
     log.info("app.stopped")

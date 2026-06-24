@@ -560,40 +560,43 @@ async def record_event(
             continue
         new_progress = q["progress"] + 1
         if new_progress >= q["target"]:
-            await conn.execute(
-                "UPDATE quests SET progress = $1, completed_at = NOW() "
-                "WHERE id = $2 AND deleted_at IS NULL",
-                new_progress, q["id"],
-            )
-            # Award quest XP via a fresh xp_events row (idempotent by quest id).
-            quest_reward = await conn.fetchrow(
-                """
-                INSERT INTO xp_events (user_id, event_key, xp_delta, ref_type, ref_id)
-                VALUES ($1, 'quest.complete', $2, 'quest', $3)
-                ON CONFLICT (user_id, event_key, ref_type, ref_id)
-                    WHERE deleted_at IS NULL DO NOTHING
-                RETURNING id
-                """,
-                user_id, q["reward_xp"], q["id"],
-            )
-            if quest_reward is not None:
-                result.xp_gained += q["reward_xp"]
-                # Re-read progress to apply the quest reward to xp/level.
-                bumped = await conn.fetchrow(
-                    "UPDATE user_progress SET current_xp = current_xp + $2, "
-                    "current_level = $3, updated_at = NOW() "
-                    "WHERE user_id = $1 AND deleted_at IS NULL "
-                    "RETURNING current_xp, current_level",
-                    user_id, q["reward_xp"], level_for_xp(new_xp + q["reward_xp"]),
+            # Wrap completion + XP award in one transaction so a crash between
+            # the two statements can't leave the quest marked complete but XP unawarded.
+            async with conn.transaction():
+                await conn.execute(
+                    "UPDATE quests SET progress = $1, completed_at = NOW() "
+                    "WHERE id = $2 AND deleted_at IS NULL",
+                    new_progress, q["id"],
                 )
-                if bumped and bumped["current_level"] > (result.new_level or old_level):
-                    result.new_level = bumped["current_level"]
-                    await conn.execute(
-                        "UPDATE user_progress SET unseen_level_up = $2 "
-                        "WHERE user_id = $1 AND deleted_at IS NULL",
-                        user_id, bumped["current_level"],
+                # Award quest XP via a fresh xp_events row (idempotent by quest id).
+                quest_reward = await conn.fetchrow(
+                    """
+                    INSERT INTO xp_events (user_id, event_key, xp_delta, ref_type, ref_id)
+                    VALUES ($1, 'quest.complete', $2, 'quest', $3)
+                    ON CONFLICT (user_id, event_key, ref_type, ref_id)
+                        WHERE deleted_at IS NULL DO NOTHING
+                    RETURNING id
+                    """,
+                    user_id, q["reward_xp"], q["id"],
+                )
+                if quest_reward is not None:
+                    result.xp_gained += q["reward_xp"]
+                    # Re-read progress to apply the quest reward to xp/level.
+                    bumped = await conn.fetchrow(
+                        "UPDATE user_progress SET current_xp = current_xp + $2, "
+                        "current_level = $3, updated_at = NOW() "
+                        "WHERE user_id = $1 AND deleted_at IS NULL "
+                        "RETURNING current_xp, current_level",
+                        user_id, q["reward_xp"], level_for_xp(new_xp + q["reward_xp"]),
                     )
-                new_xp += q["reward_xp"]
+                    if bumped and bumped["current_level"] > (result.new_level or old_level):
+                        result.new_level = bumped["current_level"]
+                        await conn.execute(
+                            "UPDATE user_progress SET unseen_level_up = $2 "
+                            "WHERE user_id = $1 AND deleted_at IS NULL",
+                            user_id, bumped["current_level"],
+                        )
+                    new_xp += q["reward_xp"]
             result.quest_completed.append(q["code"])
         else:
             await conn.execute(

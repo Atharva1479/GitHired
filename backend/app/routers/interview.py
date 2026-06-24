@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import uuid
 
 import asyncpg
@@ -130,20 +131,23 @@ async def end_session(
                     **ev,
                 })
             rpt = await generate_report(session.topic, session.role, evals)
-            # Acquire a fresh connection — the request-scoped conn is already released
+            # Acquire a fresh connection — the request-scoped conn is already released.
+            # Both writes are in one transaction so a crash can't leave a partial report.
             async with pool().acquire() as bg_conn:
-                await repo.save_question_reports(bg_conn, session_id, evals)
-                await repo.save_report(
-                    bg_conn, session_id,
-                    rpt["overall_score"],
-                    rpt["skill_breakdown"],
-                    rpt["summary"],
-                )
+                async with bg_conn.transaction():
+                    await repo.save_question_reports(bg_conn, session_id, evals)
+                    await repo.save_report(
+                        bg_conn, session_id,
+                        rpt["overall_score"],
+                        rpt["skill_breakdown"],
+                        rpt["summary"],
+                    )
             log.info("interview.report_generated", session_id=session_id)
         except Exception as exc:
             log.error("interview.report_bg_failed", session_id=session_id, error=str(exc))
 
-    asyncio.create_task(_bg_report())
+    # Pass an explicit context copy so structlog request_id/user_id are visible in the task.
+    asyncio.create_task(_bg_report(), context=contextvars.copy_context())
     return JSONResponse({"ok": True, "session_id": session_id})
 
 

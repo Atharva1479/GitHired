@@ -44,6 +44,14 @@ def get_vectors() -> Any:
     return _wv
 
 
+def unload() -> None:
+    """Release the 1.7 GB word2vec model from memory. Call on worker shutdown."""
+    global _wv
+    with _lock:
+        _wv = None
+    log.info("word_semantic: model unloaded")
+
+
 def word_similarity_score(jd_keywords: list[str], resume_parsed: dict) -> dict:
     wv = get_vectors()
     if wv is None:
