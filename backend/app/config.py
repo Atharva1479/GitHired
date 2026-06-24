@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 10 * 1024 * 1024  # 10 MB
     google_client_id: str = ""
     google_client_secret: SecretStr = SecretStr("")
-    session_secret: SecretStr = SecretStr("dev-only-change-me-please-rotate")
+    session_secret: SecretStr = SecretStr("dev-only-change-me-please-rotate")  # override in non-dev envs
     backend_url: str = "http://localhost:8000"
     frontend_url: str = "http://localhost:3000"
     cookie_secure: bool = False
@@ -128,11 +128,11 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _production_secret_guard(self) -> "Settings":
         if (
-            self.environment == "production"
+            self.environment != "development"
             and self.session_secret.get_secret_value() == "dev-only-change-me-please-rotate"
         ):
             raise ValueError(
-                "SESSION_SECRET must be changed from the default value in production. "
+                "SESSION_SECRET must be changed from the default value in non-development environments. "
                 "Set SESSION_SECRET to a long random string in your environment or .env file."
             )
         return self

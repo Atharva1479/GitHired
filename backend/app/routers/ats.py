@@ -1,7 +1,8 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from app.deps import get_user_id
 from app.services.ats.ai_feedback import generate_ats_feedback
 from app.services.ats.resume_tailor import generate_tailor_suggestions
 from app.services.ats.scorer import analyze_resume
@@ -28,13 +29,19 @@ class ATSTailorRequest(BaseModel):
 
 
 @router.post("/ai-feedback")
-async def ai_feedback(body: ATSFeedbackRequest) -> JSONResponse:
+async def ai_feedback(
+    body: ATSFeedbackRequest,
+    user_id: int = Depends(get_user_id),
+) -> JSONResponse:
     result = await generate_ats_feedback(body.model_dump())
     return JSONResponse(content=result)
 
 
 @router.post("/tailor")
-async def tailor_resume(body: ATSTailorRequest) -> JSONResponse:
+async def tailor_resume(
+    body: ATSTailorRequest,
+    user_id: int = Depends(get_user_id),
+) -> JSONResponse:
     """Rewrite specific resume bullets to incorporate missing ATS keywords.
 
     Returns a list of {section, original, rewritten, keywords_added, rationale} objects.
@@ -59,6 +66,7 @@ async def analyze(
     job_description: str = Form(...),
     file: UploadFile | None = File(None),
     resume_text: str | None = Form(None),
+    user_id: int = Depends(get_user_id),
 ) -> JSONResponse:
     """
     Analyze a resume against a job description and return a comprehensive ATS score.

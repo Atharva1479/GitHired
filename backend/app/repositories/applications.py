@@ -170,8 +170,9 @@ async def count_created_within(
     val = await conn.fetchval(
         "SELECT COUNT(*) FROM applications "
         "WHERE user_id = $1 AND deleted_at IS NULL "
-        f"AND created_at >= NOW() - INTERVAL '{int(days)} days'",
+        "AND created_at >= NOW() - ($2::int * INTERVAL '1 day')",
         user_id,
+        days,
     )
     return int(val or 0)
 
