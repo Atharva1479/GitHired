@@ -51,21 +51,23 @@ describe("ErrorBoundary", () => {
 
   it("resets error state when Try again is clicked", async () => {
     const user = userEvent.setup();
-    const { rerender } = render(
+    // Mutable config — flip to false BEFORE the click so Bomb doesn't re-throw
+    // when ErrorBoundary resets and re-renders its children.
+    const config = { shouldThrow: true };
+    function ControlledBomb() {
+      if (config.shouldThrow) throw new Error("Test render error");
+      return <div>Normal content</div>;
+    }
+
+    render(
       <ErrorBoundary>
-        <Bomb shouldThrow={true} />
+        <ControlledBomb />
       </ErrorBoundary>,
     );
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
 
+    config.shouldThrow = false;
     await user.click(screen.getByRole("button", { name: /try again/i }));
-
-    // After reset, children render normally (we need to rerender with fixed child)
-    rerender(
-      <ErrorBoundary>
-        <Bomb shouldThrow={false} />
-      </ErrorBoundary>,
-    );
     expect(screen.getByText("Normal content")).toBeInTheDocument();
   });
 

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useJobSearch } from "@/hooks/useJobs";
 import type { JobResult } from "@/types/jobs";
@@ -42,15 +42,18 @@ function makeJob(overrides: Partial<JobResult> = {}): JobResult {
   };
 }
 
+// useState lazy-init keeps the same QueryClient across rerenders so staleTime
+// actually prevents re-fetches when only freshnessHours changes.
 function wrapper({ children }: { children: ReactNode }) {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+  const [qc] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  );
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
 describe("useJobSearch freshness filter", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(searchJobs).mockResolvedValue([
       makeJob({ id: 1, hours_old: 5 }),   // fresh: <6h
       makeJob({ id: 2, hours_old: 20 }),  // acceptable: <24h
