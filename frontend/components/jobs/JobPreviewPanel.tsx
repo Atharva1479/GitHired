@@ -66,8 +66,8 @@ export default function JobPreviewPanel({ job, onClose, onApply }: JobPreviewPan
   async function handleAtsScan() {
     try {
       const result = await runAtsScan(job.id);
-      localStorage.setItem("ats_result", JSON.stringify(result));
-      localStorage.setItem("ats_jd_text", job.description ?? "");
+      sessionStorage.setItem("ats_result", JSON.stringify(result));
+      sessionStorage.setItem("ats_jd_text", job.description ?? "");
       onClose();
       router.push("/ats/results");
     } catch {

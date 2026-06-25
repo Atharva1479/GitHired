@@ -25,7 +25,7 @@ def issue(response: Response, *, user_id: int) -> None:
         max_age=settings.session_max_age_days * 24 * 3600,
         httponly=True,
         secure=settings.cookie_secure,
-        samesite="lax",
+        samesite="strict",
         path="/",
     )
 

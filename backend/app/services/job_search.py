@@ -222,11 +222,12 @@ async def _query_cache(
             to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(description, ''))
             @@ plainto_tsquery('english', $1)
           )
-          AND ($2::text IS NULL OR location ILIKE '%' || $2 || '%')
+          AND ($2::text IS NULL OR location ILIKE '%' || $2 || '%' ESCAPE '\\')
         ORDER BY posted_at DESC NULLS LAST
         LIMIT 60
         """,
-        query, location,
+        query,
+        location.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") if location else None,
     )
     if not rows:
         return []

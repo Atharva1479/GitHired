@@ -177,7 +177,14 @@ export const googleLoginUrl = `${BASE}/auth/google/login`;
 export const api = {
   auth: {
     me: () => request<Me>("/auth/me"),
-    logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+    logout: async () => {
+      const result = await request<{ ok: boolean }>("/auth/logout", { method: "POST" });
+      ["ats_result", "ats_jd_text", "jp_interview_session"].forEach(k => {
+        localStorage.removeItem(k);
+        sessionStorage.removeItem(k);
+      });
+      return result;
+    },
     updatePreferences: (patch: { auto_brief_enabled: boolean }) =>
       request<{ auto_brief_enabled: boolean }>("/auth/preferences", {
         method: "PATCH",

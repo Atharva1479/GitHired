@@ -292,8 +292,8 @@ async def generate_plan(
             data.target_companies,
             data.existing_sections,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=503, detail="AI service temporarily unavailable")
 
 
 @router.post("/generate/apply", response_model=StudyPlan)
@@ -342,8 +342,8 @@ async def generate_topics(
             data.count,
             data.hint,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=503, detail="AI service temporarily unavailable")
 
 
 @router.post(

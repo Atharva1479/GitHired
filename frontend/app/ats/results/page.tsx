@@ -238,13 +238,13 @@ export default function AtsResultsPage() {
   const [reCheckOpen, setReCheckOpen] = useState(false);
 
   useEffect(() => {
-    const raw = localStorage.getItem("ats_result");
+    const raw = sessionStorage.getItem("ats_result");
     if (!raw) { router.replace("/ats"); return; }
     let cancelled = false;
     try {
       const parsed = JSON.parse(raw) as AnalysisResult;
       setResult(parsed);
-      setJdText(localStorage.getItem("ats_jd_text") ?? "");
+      setJdText(sessionStorage.getItem("ats_jd_text") ?? "");
       setHydrated(true);
       setTimeout(() => setBarsReady(true), 100);
       setFbLoading(true);
@@ -257,7 +257,7 @@ export default function AtsResultsPage() {
   }, [router]);
 
   function handleReCheckSuccess(newResult: AnalysisResult) {
-    localStorage.setItem("ats_result", JSON.stringify(newResult));
+    sessionStorage.setItem("ats_result", JSON.stringify(newResult));
     setResult(newResult);
     setReCheckOpen(false);
     // reset dependent state
@@ -298,7 +298,7 @@ export default function AtsResultsPage() {
     bySection[s].push(kw);
   }
 
-  function handleNew() { localStorage.removeItem("ats_result"); router.push("/ats"); }
+  function handleNew() { sessionStorage.removeItem("ats_result"); router.push("/ats"); }
 
   return (
     <AppShell>

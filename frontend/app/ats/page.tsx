@@ -164,8 +164,8 @@ export default function AtsPage() {
     try {
       const result = await analyzeResume(fd);
       clearInterval(stepTimer);
-      localStorage.setItem("ats_result", JSON.stringify(result));
-      localStorage.setItem("ats_jd_text", jd);
+      sessionStorage.setItem("ats_result", JSON.stringify(result));
+      sessionStorage.setItem("ats_jd_text", jd);
       router.push("/ats/results");
     } catch (err) {
       clearInterval(stepTimer);

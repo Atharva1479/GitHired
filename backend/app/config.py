@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
     sentry_traces_sample_rate: float = 0.1
     metrics_enabled: bool = True
+    metrics_bearer_token: str = ""  # if non-empty, /metrics requires "Authorization: Bearer <token>"
     auth_rate_limit_per_minute: int = 10
     redis_url: str | None = None  # e.g. "redis://redis:6379/0" — enables distributed rate limiting
 

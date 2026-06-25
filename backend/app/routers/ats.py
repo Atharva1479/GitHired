@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.deps import get_user_id
 from app.services.ats.ai_feedback import generate_ats_feedback
@@ -22,8 +22,8 @@ class ATSFeedbackRequest(BaseModel):
 
 
 class ATSTailorRequest(BaseModel):
-    resume_text: str
-    jd_text: str
+    resume_text: str = Field(max_length=50000)
+    jd_text: str = Field(max_length=20000)
     required_missing: list[str] = []
     preferred_missing: list[str] = []
 

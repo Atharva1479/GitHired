@@ -91,6 +91,9 @@ def build_followup_email_prompt(
     contact_name: str | None, sender_name: str | None = None,
     resume_text: str | None = None,
 ) -> str:
+    # Strip newlines to prevent prompt injection via user-controlled fields.
+    company = company.replace("\n", " ").replace("\r", " ").strip()[:200]
+    role = role.replace("\n", " ").replace("\r", " ").strip()[:200]
     greeting = f"Hi {contact_name}," if contact_name else "Hi Hiring Team,"
     full_name = (sender_name or "").strip() or None
     closer = f"Best,\\n{full_name}" if full_name else "Best,"

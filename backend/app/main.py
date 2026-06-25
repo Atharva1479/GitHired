@@ -136,6 +136,11 @@ app.state.limiter = limiter
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(metrics.PrometheusMiddleware)
 app.add_middleware(RequestContextMiddleware)
+if "*" in settings.cors_origins and settings.environment != "development":
+    raise RuntimeError(
+        "CORS wildcard ('*') is not allowed with credentials in non-development environments. "
+        "Set CORS_ORIGINS to an explicit list of allowed origins."
+    )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -217,8 +222,12 @@ async def readyz() -> dict[str, bool]:
 
 
 @app.get("/metrics", include_in_schema=False)
-async def prometheus_metrics() -> Response:
+async def prometheus_metrics(request: Request) -> Response:
     if not settings.metrics_enabled:
         return Response(status_code=404)
+    if settings.metrics_bearer_token:
+        auth = request.headers.get("Authorization", "")
+        if auth != f"Bearer {settings.metrics_bearer_token}":
+            return Response(status_code=401)
     payload, content_type = metrics.render()
     return Response(content=payload, media_type=content_type)
