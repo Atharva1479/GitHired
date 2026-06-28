@@ -1,7 +1,16 @@
 from pathlib import Path
+from urllib.parse import urlparse
 
-from pydantic import PostgresDsn, SecretStr, model_validator
+from pydantic import PostgresDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Cloud metadata endpoints that must never be used as Ollama base URLs (SSRF).
+_METADATA_HOSTS = frozenset({
+    "169.254.169.254",   # AWS / GCP / Azure IMDS
+    "metadata.google.internal",
+    "169.254.170.2",     # ECS task credentials
+    "100.100.100.200",   # Alibaba Cloud metadata
+})
 
 _ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 
@@ -60,6 +69,16 @@ class Settings(BaseSettings):
     #             agent keeps working when the free-tier cap dies.
     llm_provider: str = "auto"
     ollama_base_url: str = "http://localhost:11434"
+
+    @field_validator("ollama_base_url")
+    @classmethod
+    def _block_metadata_ssrf(cls, v: str) -> str:
+        host = urlparse(v).hostname or ""
+        if host in _METADATA_HOSTS:
+            raise ValueError(
+                f"ollama_base_url may not point to a cloud metadata endpoint ({host})"
+            )
+        return v
     # Default to qwen3.5:2b — 2.7GB, 256K context, native tool calling.
     # Swap to llama3.2:3b, qwen2.5:3b, or any other Ollama tag without
     # touching code; the client posts whatever name is set here.

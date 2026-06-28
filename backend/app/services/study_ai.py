@@ -43,20 +43,26 @@ _JSON_SYSTEM = (
 )
 
 
+def _san(text: str, max_len: int = 200) -> str:
+    """Strip newlines and truncate user-controlled strings before prompt injection."""
+    return text.replace("\n", " ").replace("\r", " ").strip()[:max_len]
+
+
 def _plan_prompt(
     role: str,
     target_companies: list[str] | None,
     existing_sections: list[str] | None,
 ) -> str:
+    safe_role = _san(role, 200)
     companies = (
-        ", ".join(target_companies) if target_companies else "general SWE roles"
+        ", ".join(_san(c, 100) for c in target_companies) if target_companies else "general SWE roles"
     )
-    existing = ", ".join(existing_sections) if existing_sections else "none"
+    existing = ", ".join(_san(s, 100) for s in existing_sections) if existing_sections else "none"
     return f"""{_JSON_SYSTEM}
 
 You are a curriculum designer building a technical interview revision plan.
 
-Engineer role: {role}
+Engineer role: {safe_role}
 Target companies: {companies}
 Existing sections (do NOT duplicate): {existing}
 
@@ -91,13 +97,14 @@ def _topics_prompt(
     count: int,
     hint: str | None,
 ) -> str:
-    hint_line = f"\nUser hint: {hint}" if hint else ""
+    safe_hint = _san(hint, 300) if hint else None
+    hint_line = f"\nUser hint: {safe_hint}" if safe_hint else ""
     return f"""{_JSON_SYSTEM}
 
 You are a curriculum designer generating interview revision topics.
 
-Section: {section_name}
-Subsection: {subsection_name}{hint_line}
+Section: {_san(section_name, 200)}
+Subsection: {_san(subsection_name, 200)}{hint_line}
 
 Generate exactly {count} specific, interview-relevant topics for this subsection.
 Each topic may have an optional "notes" field (3-6 comma-separated keywords).

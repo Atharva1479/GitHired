@@ -21,7 +21,11 @@ from app.services.tts import TtsUnavailable, synthesize
 
 router = APIRouter()
 
+# Expensive AI calls (agent, TTS, STT) share the tighter budget.
+# Cheap reads (greeting, history) get a looser limit so normal usage
+# can't consume the AI budget by accident.
 _RATE = f"{settings.pilot_rate_limit_per_minute}/minute"
+_READ_RATE = "60/minute"
 
 
 class PilotTurn(BaseModel):
@@ -81,7 +85,7 @@ def _ensure_enabled() -> None:
 
 
 @router.get("/greeting")
-@limiter.limit(_RATE)
+@limiter.limit(_READ_RATE)
 async def greeting(
     request: Request,
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
@@ -247,7 +251,7 @@ def _sse(payload: dict) -> bytes:
 
 
 @router.get("/history", response_model=HistoryResponse)
-@limiter.limit(_RATE)
+@limiter.limit(_READ_RATE)
 async def history(
     request: Request,
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
@@ -310,7 +314,8 @@ async def stt_endpoint(
     try:
         text = await transcribe(body, filename=audio.filename or "speech.webm")
     except SttUnavailable as e:
-        raise HTTPException(503, f"stt unavailable: {e}") from e
+        log.warning("pilot.stt_unavailable", error=str(e))
+        raise HTTPException(503, "Speech recognition temporarily unavailable") from e
     return {"text": text}
 
 
@@ -325,7 +330,8 @@ async def tts_endpoint(
     try:
         audio = await synthesize(body.text)
     except TtsUnavailable as e:
-        raise HTTPException(503, f"tts unavailable: {e}") from e
+        log.warning("pilot.tts_unavailable", error=str(e))
+        raise HTTPException(503, "Voice synthesis temporarily unavailable") from e
     return Response(
         content=audio,
         media_type="audio/mpeg",

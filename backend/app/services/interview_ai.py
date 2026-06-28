@@ -205,6 +205,7 @@ async def generate_next_question(
     topic_clusters: list[str],
     turns: list[dict[str, Any]],
     difficulty_adjustment: int = 0,
+    years_exp: str = "",
 ) -> dict[str, Any]:
     """Generate the next interview question based on coverage and performance."""
     # Build coverage summary
@@ -410,7 +411,9 @@ async def evaluate_turn(
         )
         return {"ideal_answer": ideal, "score": score, "feedback": feedback}
 
-    safe_answer = trimmed.replace("</candidate_answer>", " ").replace("<candidate_answer>", " ")
+    # Strip ALL XML-like tags from the answer to prevent prompt injection
+    # (not just the two wrapper tags — any <tag> could break out of the template).
+    safe_answer = re.sub(r"<[^>]{0,200}>", " ", trimmed)
     prompt = f"""Output JSON ONLY. No markdown, no commentary.
 
 You are a strict technical interviewer evaluating a candidate response in a {topic} interview for a {role} role.
