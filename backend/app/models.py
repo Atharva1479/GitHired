@@ -431,6 +431,8 @@ class InterviewTurn(BaseModel):
     parent_turn_id: int | None = None
     followup_depth: int = 0
     agent_decision: str | None = None
+    model_name: str | None = None
+    latency_ms: int = 0
 
 
 # ── LangGraph agent mode request/response models ──────────────────────────────

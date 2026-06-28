@@ -16,11 +16,21 @@ from typing import Any
 
 import structlog
 
+try:
+    from langsmith import traceable as _traceable
+except ImportError:
+    def _traceable(**_kw):  # type: ignore[misc]
+        def _wrap(fn):
+            return fn
+        return _wrap
+
 from app.config import settings
 from app.services.gemini_service import GeminiUnavailable, _ensure_model
 from app.services.ollama_service import OllamaUnavailable, chat as ollama_chat
 
 log = structlog.get_logger("dsa_ai")
+
+_ANALYZE_SOLUTION_V = "v1"
 
 _JSON_SYSTEM = (
     "Output JSON ONLY — no markdown fences, no commentary, no explanation. "
@@ -136,6 +146,7 @@ async def _ollama_analyze(prompt: str) -> dict[str, Any]:
     return result
 
 
+@_traceable(name="dsa.analyze_solution", run_type="llm", tags=[f"prompt_v:{_ANALYZE_SOLUTION_V}"])
 async def analyze_solution(
     title: str,
     topic: str,

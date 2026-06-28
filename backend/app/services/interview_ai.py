@@ -9,17 +9,40 @@ Three public entry points:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import re
+import time
 from typing import Any
 
 import structlog
+
+try:
+    from langsmith import traceable as _traceable
+except ImportError:
+    def _traceable(**_kw):  # type: ignore[misc]
+        def _wrap(fn):
+            return fn
+        return _wrap
 
 from app.config import settings
 from app.services.gemini_service import GeminiUnavailable, _ensure_model
 from app.services.ollama_service import OllamaUnavailable, chat as ollama_chat
 
 log = structlog.get_logger("interview_ai")
+
+# Bump these whenever the corresponding prompt string changes so LangSmith
+# traces can be filtered/compared by prompt version.
+_EVALUATE_TURN_V = "v2"
+_GENERATE_QUESTIONS_V = "v1"
+_GENERATE_REPORT_V = "v1"
+_PLAN_TOPICS_V = "v1"
+
+# Tracks which provider answered the current coroutine's _call().
+# contextvars is safe under asyncio concurrency — each task gets its own copy.
+_current_model: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "_current_model", default="unknown"
+)
 
 # Named interview style categories — everything else is treated as a tech/custom topic.
 _STYLE_CATEGORIES = {"HR Behavioral", "System Design", "JD Based", "Technical Interview"}
@@ -80,6 +103,7 @@ async def _gemini(prompt: str, max_tokens: int = 1024) -> Any:
     text = (getattr(response, "text", "") or "").strip()
     if not text:
         raise GeminiUnavailable("empty response")
+    _current_model.set(f"gemini/{settings.gemini_model}")
     return _extract_json(text)
 
 
@@ -92,6 +116,7 @@ async def _ollama(prompt: str, temperature: float = 0.3) -> Any:
     content = raw.get("message", {}).get("content", "")
     if not content:
         raise OllamaUnavailable("empty response")
+    _current_model.set(f"ollama/{settings.ollama_model}")
     return _extract_json(content)
 
 
@@ -159,6 +184,7 @@ def _exp_calibration(years_exp: str) -> str:
     )
 
 
+@_traceable(name="interview.plan_topics", run_type="llm", tags=[f"prompt_v:{_PLAN_TOPICS_V}"])
 async def plan_interview_topics(
     topic: str,
     role: str,
@@ -281,6 +307,7 @@ Return exactly:
     }
 
 
+@_traceable(name="interview.generate_questions", run_type="llm", tags=[f"prompt_v:{_GENERATE_QUESTIONS_V}"])
 async def generate_questions(
     topic: str,
     role: str,
@@ -390,12 +417,14 @@ Return: {{"ideal_answer": "<3-5 sentences in first person, concrete and specific
         return ""
 
 
+@_traceable(name="interview.evaluate_turn", run_type="llm", tags=[f"prompt_v:{_EVALUATE_TURN_V}"])
 async def evaluate_turn(
     topic: str,
     role: str,
     question: str,
     user_answer: str,
 ) -> dict[str, Any]:
+    """Evaluate one interview answer. Returns score, feedback, ideal_answer, model, latency_ms."""
     trimmed = user_answer.strip()
     word_count = len(trimmed.split()) if trimmed else 0
 
@@ -409,7 +438,13 @@ async def evaluate_turn(
             else f"Your answer ('{trimmed}') is too short to demonstrate any knowledge. "
                  "A complete answer requires explaining the concept clearly with supporting details."
         )
-        return {"ideal_answer": ideal, "score": score, "feedback": feedback}
+        return {
+            "ideal_answer": ideal,
+            "score": score,
+            "feedback": feedback,
+            "model": "skipped",
+            "latency_ms": 0,
+        }
 
     # Strip ALL XML-like tags from the answer to prevent prompt injection
     # (not just the two wrapper tags — any <tag> could break out of the template).
@@ -445,18 +480,46 @@ Evaluate the response and return this exact JSON structure:
 STRICT RULE: If the answer does not demonstrate actual knowledge of the topic, score it 0-2 regardless of length or confidence.
 </scoring_rubric>"""
 
+    t0 = time.perf_counter()
     try:
         result = await _call(prompt, max_tokens=600, temperature=0.3)
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        model = _current_model.get()
+
+        score = max(0, min(10, int(result.get("score", 5))))
+        ideal = str(result.get("ideal_answer", "")).strip()
+        feedback = str(result.get("feedback", "")).strip()
+
+        # Semantic validation: reject hollow AI outputs
+        if len(feedback) < 15:
+            feedback = "Feedback was not generated — please retry."
+        if not ideal:
+            ideal = "Ideal answer was not generated — please retry."
+
+        log.info(
+            "interview_ai.evaluate_turn_ok",
+            topic=topic, score=score, model=model, latency_ms=latency_ms,
+        )
         return {
-            "ideal_answer": str(result.get("ideal_answer", "")),
-            "score": max(0, min(10, int(result.get("score", 5)))),
-            "feedback": str(result.get("feedback", "")),
+            "ideal_answer": ideal,
+            "score": score,
+            "feedback": feedback,
+            "model": model,
+            "latency_ms": latency_ms,
         }
     except Exception as exc:
-        log.error("interview_ai.evaluate_turn_failed", error=str(exc))
-        return {"ideal_answer": "", "score": 0, "feedback": "AI evaluation failed."}
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        log.error("interview_ai.evaluate_turn_failed", error=str(exc), latency_ms=latency_ms)
+        return {
+            "ideal_answer": "",
+            "score": 0,
+            "feedback": "AI evaluation failed.",
+            "model": "error",
+            "latency_ms": latency_ms,
+        }
 
 
+@_traceable(name="interview.generate_report", run_type="llm", tags=[f"prompt_v:{_GENERATE_REPORT_V}"])
 async def generate_report(
     topic: str,
     role: str,

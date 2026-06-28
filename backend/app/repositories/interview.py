@@ -49,27 +49,33 @@ async def save_agent_turn(
     followup_depth: int,
     parent_turn_id: int | None,
     agent_decision: str | None,
+    model_name: str | None = None,
+    latency_ms: int = 0,
 ) -> InterviewTurn:
     """Save a turn produced by the LangGraph agent."""
     row = await conn.fetchrow(
         """
         INSERT INTO interview_turns
             (session_id, question_index, question, user_answer,
-             turn_type, followup_depth, parent_turn_id, agent_decision)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             turn_type, followup_depth, parent_turn_id, agent_decision,
+             model_name, latency_ms)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *
         """,
         session_id, question_index, question, user_answer,
         turn_type, followup_depth, parent_turn_id, agent_decision,
+        model_name or None, latency_ms,
     )
     # Also write to question_reports for unified report queries
     await conn.execute(
         """
         INSERT INTO interview_question_reports
-            (session_id, question_index, question, user_answer, ideal_answer, score, feedback)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (session_id, question_index, question, user_answer, ideal_answer,
+             score, feedback, model_name, latency_ms)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         """,
-        session_id, question_index, question, user_answer, ideal_answer, score, feedback,
+        session_id, question_index, question, user_answer, ideal_answer,
+        score, feedback, model_name or None, latency_ms,
     )
     return InterviewTurn.model_validate(dict(row))
 
@@ -151,8 +157,9 @@ async def save_question_reports(
     await conn.executemany(
         """
         INSERT INTO interview_question_reports
-            (session_id, question_index, question, user_answer, ideal_answer, score, feedback)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (session_id, question_index, question, user_answer, ideal_answer,
+             score, feedback, model_name, latency_ms)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         """,
         [
             (
@@ -163,6 +170,8 @@ async def save_question_reports(
                 i["ideal_answer"],
                 i["score"],
                 i["feedback"],
+                i.get("model") or None,
+                i.get("latency_ms", 0),
             )
             for i in items
         ],

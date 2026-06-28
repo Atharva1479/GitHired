@@ -21,7 +21,18 @@ from typing import Any
 
 import structlog
 
+try:
+    from langsmith import traceable as _traceable
+except ImportError:
+    def _traceable(**_kw):  # type: ignore[misc]
+        def _wrap(fn):
+            return fn
+        return _wrap
+
 from app.config import settings
+
+_GENERATE_PLAN_V = "v1"
+_GENERATE_TOPICS_V = "v1"
 from app.models import (
     StudyAISectionPreview,
     StudyAISubsectionPreview,
@@ -188,6 +199,7 @@ async def _call_with_fallback(prompt: str) -> Any:
 # ── Public API ────────────────────────────────────────────────────────
 
 
+@_traceable(name="study.generate_plan", run_type="llm", tags=[f"prompt_v:{_GENERATE_PLAN_V}"])
 async def generate_plan(
     role: str,
     target_companies: list[str] | None = None,
@@ -224,6 +236,7 @@ async def generate_plan(
         raise ValueError("AI returned an unexpected format. Try again.") from e
 
 
+@_traceable(name="study.generate_topics", run_type="llm", tags=[f"prompt_v:{_GENERATE_TOPICS_V}"])
 async def generate_topics(
     section_name: str,
     subsection_name: str,
