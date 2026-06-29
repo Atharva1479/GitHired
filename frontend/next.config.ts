@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: https://lh3.googleusercontent.com",
               "connect-src 'self' http://localhost:8000",
               "media-src 'self' blob:",
+              "frame-src 'self' blob:",
               "frame-ancestors 'none'",
             ].join("; "),
           },
